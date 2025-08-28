@@ -8,23 +8,47 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOi
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
         getAll() {
+            if (typeof document === 'undefined') {
+                return []
+            }
+
             return document.cookie
                 .split(';')
-                .map(cookie => cookie.trim().split('='))
-                .reduce((acc, [name, value]) => {
-                    if (name && value) {
-                        acc[name] = decodeURIComponent(value)
-                    }
-                    return acc
-                }, {} as Record<string, string>)
+                .map(cookie => {
+                    const [name, ...rest] = cookie.trim().split('=')
+                    const value = rest.join('=')
+                    return { name: name || '', value: value || '' }
+                })
+                .filter(cookie => cookie.name)
         },
         setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) => {
-                Cookies.set(name, value, {
-                    ...options,
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'lax'
-                })
+                if (typeof document !== 'undefined') {
+                    // Convert Supabase cookie options to js-cookie format
+                    const cookieOptions: any = {
+                        secure: process.env.NODE_ENV === 'production',
+                        sameSite: 'lax'
+                    }
+
+                    if (options) {
+                        // Handle maxAge (convert to expires date)
+                        if (options.maxAge) {
+                            cookieOptions.expires = new Date(Date.now() + options.maxAge * 1000)
+                        }
+
+                        // Handle other standard options
+                        if (options.domain) cookieOptions.domain = options.domain
+                        if (options.path) cookieOptions.path = options.path
+                        if (options.secure !== undefined) cookieOptions.secure = options.secure
+                        if (options.sameSite) cookieOptions.sameSite = options.sameSite
+                        if (options.httpOnly !== undefined) {
+                            // Note: httpOnly cannot be set from client-side JavaScript
+                            // This is handled by the server-side cookie implementation
+                        }
+                    }
+
+                    Cookies.set(name, value, cookieOptions)
+                }
             })
         }
     }

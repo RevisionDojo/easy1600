@@ -1,0 +1,5 @@
+2025-08-28 01:50:06 [error]: Error: getaddrinfo ENOTFOUND db.fqobxogmxreudzfyaxbq.supabase.co
+    at /Users/arjun/easy1600/easy1600/easy1600-sat-prep/migrations/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async DatabaseManager.connect (file:///Users/arjun/easy1600/easy1600/easy1600-sat-prep/migrations/src/utils/database.js:41:28)
+    at async [eval]:5:5
