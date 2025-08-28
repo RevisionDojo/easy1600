@@ -1,10 +1,22 @@
+'use client'
+
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { BookOpen, Target, Users, Zap } from "lucide-react"
 import Link from "next/link"
 import { Navigation } from "@/components/navigation"
+import { AuthPopup } from "@/components/auth-popup"
+import { useAuthGuard } from "@/hooks/use-auth-guard"
 
 export default function HomePage() {
+  const { requireAuth, showAuthPopup, closeAuthPopup, handleAuthSuccess } = useAuthGuard()
+
+  const handleProtectedAction = (redirectPath: string) => {
+    requireAuth(() => {
+      window.location.href = redirectPath
+    })
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navigation />
@@ -29,69 +41,92 @@ export default function HomePage() {
           {/* Top row - 2 highlighted cards centered */}
           <div className="mb-12 max-w-6xl mx-auto">
             <div className="flex justify-center gap-6 mb-6">
-              <Link href="/leaked-exams" className="block w-full max-w-xs">
-                <div className="bg-primary text-primary-foreground p-6 rounded-lg text-center hover:scale-105 transition-transform duration-200 cursor-pointer h-full">
+              <div
+                onClick={() => handleProtectedAction('/leaked-exams')}
+                className="block w-full max-w-xs cursor-pointer"
+              >
+                <div className="bg-primary text-primary-foreground p-6 rounded-lg text-center hover:scale-105 transition-transform duration-200 h-full">
                   <BookOpen className="h-12 w-12 mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">Official August 2025 SAT Exam</h3>
                   <p className="text-sm opacity-90">Latest official questions</p>
                 </div>
-              </Link>
-              <Link href="/leaked-exams" className="block w-full max-w-xs">
-                <div className="bg-primary text-primary-foreground p-6 rounded-lg text-center hover:scale-105 transition-transform duration-200 cursor-pointer h-full">
+              </div>
+              <div
+                onClick={() => handleProtectedAction('/leaked-exams')}
+                className="block w-full max-w-xs cursor-pointer"
+              >
+                <div className="bg-primary text-primary-foreground p-6 rounded-lg text-center hover:scale-105 transition-transform duration-200 h-full">
                   <Target className="h-12 w-12 mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">All Leaked SAT Exams</h3>
                   <p className="text-sm opacity-90">Complete collection</p>
                 </div>
-              </Link>
+              </div>
             </div>
 
             {/* Bottom row - 3 cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Link href="/question-bank" className="block">
-                <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 cursor-pointer h-full">
+              <div
+                onClick={() => handleProtectedAction('/question-bank')}
+                className="block cursor-pointer"
+              >
+                <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 h-full">
                   <Users className="h-12 w-12 text-primary mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">SAT Suite Question Bank</h3>
                   <p className="text-sm text-muted-foreground">Official College Board</p>
                 </div>
-              </Link>
+              </div>
 
-              <Link href="/official-exams" className="block">
-                <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 cursor-pointer h-full">
+              <div
+                onClick={() => handleProtectedAction('/official-exams')}
+                className="block cursor-pointer"
+              >
+                <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 h-full">
                   <BookOpen className="h-12 w-12 text-primary mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">ALL Official Practice Tests</h3>
                   <p className="text-sm text-muted-foreground">Full-length exams</p>
                 </div>
-              </Link>
+              </div>
 
-              <Link href="/question-bank" className="block">
-                <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 cursor-pointer h-full">
+              <div
+                onClick={() => handleProtectedAction('/question-bank')}
+                className="block cursor-pointer"
+              >
+                <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 h-full">
                   <Zap className="h-12 w-12 text-primary mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">Princeton Review Question Bank</h3>
                   <p className="text-sm text-muted-foreground">Premium prep materials</p>
                 </div>
-              </Link>
+              </div>
             </div>
           </div>
 
           {/* Action buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/practice-tests">
-              <Button size="lg" className="text-xl px-12 py-4 w-full sm:w-auto">
-                Browse Tests
-              </Button>
-            </Link>
-            <Link href="/question-bank">
-              <Button
-                variant="outline"
-                size="lg"
-                className="text-xl px-12 py-4 w-full sm:w-auto border-2 border-primary bg-transparent"
-              >
-                Browse Questions
-              </Button>
-            </Link>
+            <Button
+              size="lg"
+              className="text-xl px-12 py-4 w-full sm:w-auto"
+              onClick={() => handleProtectedAction('/practice-tests')}
+            >
+              Browse Tests
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="text-xl px-12 py-4 w-full sm:w-auto border-2 border-primary bg-transparent"
+              onClick={() => handleProtectedAction('/question-bank')}
+            >
+              Browse Questions
+            </Button>
           </div>
         </div>
       </section>
+
+      {/* Auth Popup */}
+      <AuthPopup
+        isOpen={showAuthPopup}
+        onClose={closeAuthPopup}
+        onSuccess={() => handleAuthSuccess()}
+      />
     </div>
   )
 }
