@@ -1,13 +1,32 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
+import Cookies from 'js-cookie'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fqobxogmxreudzfyaxbq.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxb2J4b2dteHJldWR6ZnlheGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzNTM4OTIsImV4cCI6MjA3MTkyOTg5Mn0.MjtWZXXAKpFmxVagY5dpxyMkqgLZGL75fyjiyla3Jqs'
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true
+// Client-side Supabase client with cookie handling
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+        getAll() {
+            return document.cookie
+                .split(';')
+                .map(cookie => cookie.trim().split('='))
+                .reduce((acc, [name, value]) => {
+                    if (name && value) {
+                        acc[name] = decodeURIComponent(value)
+                    }
+                    return acc
+                }, {} as Record<string, string>)
+        },
+        setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+                Cookies.set(name, value, {
+                    ...options,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'lax'
+                })
+            })
+        }
     }
 })
 

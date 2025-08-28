@@ -15,6 +15,7 @@ export default function AuthCallbackPage() {
     useEffect(() => {
         const handleAuthCallback = async () => {
             try {
+                // Handle the auth callback URL
                 const { data, error } = await supabase.auth.getSession()
 
                 if (error) {
@@ -28,9 +29,13 @@ export default function AuthCallbackPage() {
                     setStatus('success')
                     setMessage('Email verified successfully! You are now signed in.')
 
-                    // Redirect to home page after a short delay
+                    // Get redirect URL from query params or default to home
+                    const urlParams = new URLSearchParams(window.location.search)
+                    const redirectTo = urlParams.get('redirect') || '/'
+
+                    // Redirect after a short delay
                     setTimeout(() => {
-                        router.push('/')
+                        router.push(redirectTo)
                     }, 2000)
                 } else {
                     setStatus('error')

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { BookOpen, Target, Users, Zap } from "lucide-react"
@@ -10,6 +11,21 @@ import { useAuthGuard } from "@/hooks/use-auth-guard"
 
 export default function HomePage() {
   const { requireAuth, showAuthPopup, closeAuthPopup, handleAuthSuccess } = useAuthGuard()
+
+  // Check for auth requirement from URL params (from middleware redirect)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('auth') === 'required') {
+      const redirectPath = urlParams.get('redirect')
+      if (redirectPath) {
+        requireAuth(() => {
+          window.location.href = redirectPath
+        })
+      }
+      // Clean up URL params
+      window.history.replaceState({}, '', '/')
+    }
+  }, [requireAuth])
 
   const handleProtectedAction = (redirectPath: string) => {
     requireAuth(() => {

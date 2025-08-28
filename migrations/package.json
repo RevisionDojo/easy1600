@@ -1,0 +1,29 @@
+{
+  "name": "sat-prep-migrations",
+  "version": "1.0.0",
+  "description": "Data migration scripts for SAT Prep database",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "migrate": "node src/index.js",
+    "migrate:official": "node src/migrate-official-practice.js",
+    "migrate:op-bank": "node src/migrate-op-question-bank.js",
+    "migrate:princeton": "node src/migrate-princeton-review.js",
+    "migrate:bluebook": "node src/migrate-bluebook.js",
+    "setup-db": "psql -d sat_prep -f ../database_schema.sql",
+    "setup-db-safe": "psql -d sat_prep -f ../database_schema_safe.sql"
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1",
+    "cli-progress": "^3.12.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.10.9"
+  },
+  "keywords": ["sat", "migration", "database", "postgres"],
+  "author": "SAT Prep Team",
+  "license": "MIT"
+}
