@@ -16,12 +16,12 @@ export default function PhilosophyPage() {
                 <div className="container mx-auto max-w-4xl">
                     {/* Header */}
                     <div className="mb-8">
-                        <Link href="/">
-                            <Button variant="ghost" className="mb-4 -ml-4">
+                        <Button variant="ghost" className="mb-4 -ml-4" asChild>
+                            <Link href="/">
                                 <ArrowLeft className="h-4 w-4 mr-2" />
                                 Back to Home
-                            </Button>
-                        </Link>
+                            </Link>
+                        </Button>
 
                         <div className="text-center mb-8">
                             <Badge variant="destructive" className="mb-4 text-sm px-4 py-2">
@@ -269,16 +269,16 @@ export default function PhilosophyPage() {
                                 </p>
 
                                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                                    <Link href="/leaked-exams">
-                                        <Button size="lg" className="text-lg px-8 py-4">
+                                    <Button size="lg" className="text-lg px-8 py-4" asChild>
+                                        <Link href="/leaked-exams">
                                             Access All Official Tests
-                                        </Button>
-                                    </Link>
-                                    <Link href="/browse-questions">
-                                        <Button variant="outline" size="lg" className="text-lg px-8 py-4 border-2 border-primary">
+                                        </Link>
+                                    </Button>
+                                    <Button variant="outline" size="lg" className="text-lg px-8 py-4 border-2 border-primary" asChild>
+                                        <Link href="/browse-questions">
                                             Browse Question Bank
-                                        </Button>
-                                    </Link>
+                                        </Link>
+                                    </Button>
                                 </div>
                             </div>
                         </section>
