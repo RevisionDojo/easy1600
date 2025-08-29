@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { CheckCircle, XCircle, AlertCircle, Edit3, ImageIcon, Flag } from "lucide-react"
 import { BlueBookQuestion, BlueBookQuestionProps } from "@/types/question-types"
+import { useAuthGuard } from '@/hooks/use-auth-guard'
+import { AuthPopup } from '@/components/auth-popup'
 import 'katex/dist/katex.min.css'
 
 // Dynamic import for KaTeX to avoid SSR issues
@@ -26,6 +28,7 @@ export function QuestionCardBlueBook({
   questionNumber,
   isPracticeMode = false
 }: BlueBookQuestionProps) {
+  const { requireAuth, showAuthPopup, closeAuthPopup, handleAuthSuccess } = useAuthGuard()
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [writeAnswer, setWriteAnswer] = useState("")
   const [showResult, setShowResult] = useState(false)
@@ -57,6 +60,18 @@ export function QuestionCardBlueBook({
   const handleChoiceSelect = (optionName: string) => {
     if (hasAnswered && !isPracticeMode) return
 
+    // Require authentication before processing the answer
+    const authorized = requireAuth(() => {
+      processChoiceSelection(optionName)
+    })
+
+    // If not authorized, auth popup will show and the callback will run after auth
+    if (authorized) {
+      processChoiceSelection(optionName)
+    }
+  }
+
+  const processChoiceSelection = (optionName: string) => {
     setSelectedOption(optionName)
 
     // In practice mode, don't show results immediately
@@ -76,6 +91,18 @@ export function QuestionCardBlueBook({
   const handleWriteSubmit = () => {
     if ((hasAnswered && !isPracticeMode) || !writeAnswer.trim()) return
 
+    // Require authentication before processing the answer
+    const authorized = requireAuth(() => {
+      processWriteSubmission()
+    })
+
+    // If not authorized, auth popup will show and the callback will run after auth
+    if (authorized) {
+      processWriteSubmission()
+    }
+  }
+
+  const processWriteSubmission = () => {
     // Check if answer matches any of the accepted formats
     const normalizedAnswer = writeAnswer.trim().toLowerCase()
     const normalizedCorrect = question.correct.toLowerCase()
@@ -193,7 +220,8 @@ export function QuestionCardBlueBook({
   }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto">
+    <>
+      <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-balance">
@@ -359,6 +387,12 @@ export function QuestionCardBlueBook({
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+      <AuthPopup
+        isOpen={showAuthPopup}
+        onClose={closeAuthPopup}
+        onSuccess={handleAuthSuccess}
+      />
+    </>
   )
 }

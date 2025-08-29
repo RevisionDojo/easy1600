@@ -57,85 +57,71 @@ export default function HomePage() {
           {/* Top row - 2 highlighted cards centered */}
           <div className="mb-12 max-w-6xl mx-auto">
             <div className="flex justify-center gap-6 mb-6">
-              <div
-                onClick={() => handleProtectedAction('/leaked-exams')}
-                className="block w-full max-w-xs cursor-pointer"
-              >
+              <Link href="/leaked-exams" className="block w-full max-w-xs cursor-pointer">
                 <div className="bg-primary text-primary-foreground p-6 rounded-lg text-center hover:scale-105 transition-transform duration-200 h-full">
                   <BookOpen className="h-12 w-12 mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">Official August 2025 SAT Exam</h3>
                   <p className="text-sm opacity-90">Latest official questions</p>
                 </div>
-              </div>
-              <div
-                onClick={() => handleProtectedAction('/leaked-exams')}
-                className="block w-full max-w-xs cursor-pointer"
-              >
+              </Link>
+              <Link href="/leaked-exams" className="block w-full max-w-xs cursor-pointer">
                 <div className="bg-primary text-primary-foreground p-6 rounded-lg text-center hover:scale-105 transition-transform duration-200 h-full">
                   <Target className="h-12 w-12 mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">All Leaked SAT Exams</h3>
                   <p className="text-sm opacity-90">Complete collection</p>
                 </div>
-              </div>
+              </Link>
             </div>
 
             {/* Bottom row - 3 cards */}
-            {/* Temporarily commented out - will be re-enabled later */}
             {/*
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div
-                onClick={() => handleProtectedAction('/question-bank')}
-                className="block cursor-pointer"
-              >
+              <Link href="/question-bank" className="block cursor-pointer">
                 <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 h-full">
                   <Users className="h-12 w-12 text-primary mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">Question Bank</h3>
                   <p className="text-sm text-muted-foreground">College Board + Princeton Review</p>
                 </div>
-              </div>
+              </Link>
 
-              <div
-                onClick={() => handleProtectedAction('/official-exams')}
-                className="block cursor-pointer"
-              >
+              <Link href="/official-exams" className="block cursor-pointer">
                 <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 h-full">
                   <BookOpen className="h-12 w-12 text-primary mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">Official SAT Practice</h3>
                   <p className="text-sm text-muted-foreground">SAT Suite Official Practice</p>
                 </div>
-              </div>
+              </Link>
 
-              <div
-                onClick={() => handleProtectedAction('/question-bank')}
-                className="block cursor-pointer"
-              >
+              <Link href="/question-bank" className="block cursor-pointer">
                 <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 h-full">
                   <Zap className="h-12 w-12 text-primary mx-auto mb-4" />
                   <h3 className="text-xl font-bold mb-2">Princeton Review Question Bank</h3>
                   <p className="text-sm text-muted-foreground">Premium prep materials</p>
                 </div>
-              </div>
+              </Link>
             </div>
             */}
           </div>
 
           {/* Action buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button
-              size="lg"
-              className="text-xl px-12 py-4 w-full sm:w-auto"
-              onClick={() => handleProtectedAction('/practice-tests')}
-            >
-              Browse Tests
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="text-xl px-12 py-4 w-full sm:w-auto border-2 border-primary bg-transparent"
-              onClick={() => handleProtectedAction('/question-bank')}
-            >
-              Browse Questions
-            </Button>
+            <Link href="/leaked-exams">
+              <Button
+                size="lg"
+                className="text-xl px-12 py-4 w-full sm:w-auto"
+              >
+                Browse Tests
+              </Button>
+            </Link>
+            <Link href="/browse-questions">
+              <Button
+                variant="outline"
+                size="lg"
+                className="text-xl px-12 py-4 w-full sm:w-auto border-2 border-primary bg-transparent"
+              >
+                Browse Questions
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

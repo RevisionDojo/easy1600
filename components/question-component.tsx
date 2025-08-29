@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { useAuthGuard } from '@/hooks/use-auth-guard'
+import { AuthPopup } from '@/components/auth-popup'
 
 interface Choice {
   id: number
@@ -29,6 +31,7 @@ interface QuestionComponentProps {
 }
 
 export function QuestionComponent({ question, showExplanation = false, onAnswer }: QuestionComponentProps) {
+  const { requireAuth, showAuthPopup, closeAuthPopup, handleAuthSuccess } = useAuthGuard()
   const [selectedChoice, setSelectedChoice] = useState<Choice | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [hasAnswered, setHasAnswered] = useState(false)
@@ -36,6 +39,18 @@ export function QuestionComponent({ question, showExplanation = false, onAnswer 
   const handleChoiceSelect = (choice: Choice) => {
     if (hasAnswered) return
 
+    // Require authentication before processing the answer
+    const authorized = requireAuth(() => {
+      processChoiceSelection(choice)
+    })
+
+    // If not authorized, auth popup will show and the callback will run after auth
+    if (authorized) {
+      processChoiceSelection(choice)
+    }
+  }
+
+  const processChoiceSelection = (choice: Choice) => {
     setSelectedChoice(choice)
     setShowResult(true)
     setHasAnswered(true)
@@ -66,7 +81,8 @@ export function QuestionComponent({ question, showExplanation = false, onAnswer 
   }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto">
+    <>
+      <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-balance">Question {question.question_id}</CardTitle>
@@ -142,6 +158,12 @@ export function QuestionComponent({ question, showExplanation = false, onAnswer 
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+      <AuthPopup
+        isOpen={showAuthPopup}
+        onClose={closeAuthPopup}
+        onSuccess={handleAuthSuccess}
+      />
+    </>
   )
 }

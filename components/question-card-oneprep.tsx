@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { CheckCircle, XCircle, AlertCircle, Edit3, Flag } from "lucide-react"
 import { OnePrepQuestion, OnePrepChoice, OnePrepQuestionProps } from "@/types/question-types"
+import { useAuthGuard } from '@/hooks/use-auth-guard'
+import { AuthPopup } from '@/components/auth-popup'
 
 // Function to extract clean question content from corrupted OnePrep text
 const extractQuestionFromOnePrep = (text: string): string => {
@@ -72,6 +74,7 @@ export function QuestionCardOnePrep({
   questionNumber,
   isPracticeMode = false
 }: OnePrepQuestionProps) {
+  const { requireAuth, showAuthPopup, closeAuthPopup, handleAuthSuccess } = useAuthGuard()
   const [selectedChoice, setSelectedChoice] = useState<OnePrepChoice | null>(null)
   const [sprAnswer, setSprAnswer] = useState("")
   const [showResult, setShowResult] = useState(false)
@@ -105,6 +108,18 @@ export function QuestionCardOnePrep({
   const handleChoiceSelect = (choice: OnePrepChoice) => {
     if (hasAnswered && !isPracticeMode) return
 
+    // Require authentication before processing the answer
+    const authorized = requireAuth(() => {
+      processChoiceSelection(choice)
+    })
+
+    // If not authorized, auth popup will show and the callback will run after auth
+    if (authorized) {
+      processChoiceSelection(choice)
+    }
+  }
+
+  const processChoiceSelection = (choice: OnePrepChoice) => {
     setSelectedChoice(choice)
 
     if (!isPracticeMode) {
@@ -120,6 +135,18 @@ export function QuestionCardOnePrep({
   const handleSprSubmit = () => {
     if ((hasAnswered && !isPracticeMode) || !sprAnswer.trim()) return
 
+    // Require authentication before processing the answer
+    const authorized = requireAuth(() => {
+      processSprSubmission()
+    })
+
+    // If not authorized, auth popup will show and the callback will run after auth
+    if (authorized) {
+      processSprSubmission()
+    }
+  }
+
+  const processSprSubmission = () => {
     const isCorrect = question.spr_answers.some(
       answer => answer.toLowerCase().trim() === sprAnswer.toLowerCase().trim()
     )
@@ -188,7 +215,8 @@ export function QuestionCardOnePrep({
   }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto">
+    <>
+      <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-balance">
@@ -369,6 +397,12 @@ export function QuestionCardOnePrep({
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+      <AuthPopup
+        isOpen={showAuthPopup}
+        onClose={closeAuthPopup}
+        onSuccess={handleAuthSuccess}
+      />
+    </>
   )
 }

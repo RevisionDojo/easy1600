@@ -4,10 +4,6 @@ import { createMiddlewareSupabaseClient } from '@/lib/supabase-server'
 
 // Define protected routes that require authentication
 const protectedRoutes = [
-    '/question-bank',
-    '/practice-tests',
-    '/leaked-exams',
-    '/official-exams',
     '/api/questions',
     '/api/exams',
     '/api/user'
