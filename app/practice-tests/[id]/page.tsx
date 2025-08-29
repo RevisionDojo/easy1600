@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { QuestionCard } from "@/components/question-card"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
@@ -44,11 +45,19 @@ export default function PracticeTestPage() {
   const testName = decodeURIComponent(params.id as string)
   const subject = searchParams.get('subject')
   const isCompleteExam = searchParams.get('complete') === 'true'
+  const source = searchParams.get('source')
 
   const [session, setSession] = useState<TestSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
+  const [selectedResultQuestion, setSelectedResultQuestion] = useState<{
+    moduleIndex: number
+    questionIndex: number
+    question: EnhancedQuestion
+    userAnswer: string | null
+    status: 'correct' | 'incorrect' | 'not-answered'
+  } | null>(null)
 
   useEffect(() => {
     loadTest()
@@ -76,8 +85,18 @@ export default function PracticeTestPage() {
       let displayName = testName
       let isOfficialPractice = false
 
-      if (isCompleteExam) {
-        // Load complete exam (both subjects)
+      // Check if this is explicitly an official practice test
+      if (source === 'official') {
+        isOfficialPractice = true
+        if (isCompleteExam) {
+          response = await SATDataService.getOfficialPracticeCompleteExam(testName)
+          displayName = `${testName} (Complete Exam)`
+        } else {
+          response = await SATDataService.getOfficialPracticeExamById(testName)
+          displayName = `${testName} (Official Practice)`
+        }
+      } else if (isCompleteExam) {
+        // Load complete exam (both subjects) - try Bluebook first
         response = await SATDataService.getBluebookCompleteExam(testName)
         displayName = `${testName} (Complete Exam)`
       } else if (subject) {
@@ -631,6 +650,112 @@ export default function PracticeTestPage() {
     return null
   }
 
+  // Results Grid Component
+  const ResultsGrid = () => {
+    if (!session) return null
+
+    const getQuestionStatus = (moduleIndex: number, questionIndex: number) => {
+      const module = session.modules[moduleIndex]
+      const question = module.questions[questionIndex]
+      const questionId = question.metadata.id
+      const userAnswer = module.answers[questionId]
+
+      if (!userAnswer) return 'not-answered'
+
+      let isCorrect = false
+      if (question.format === 'bluebook') {
+        const bluebookQ = question.question as any
+        isCorrect = userAnswer === bluebookQ.correct
+      } else if (question.format === 'oneprep') {
+        const onePrepQ = question.question as any
+        if (onePrepQ.answer_type === 'mcq') {
+          const correctChoice = onePrepQ.choices.find((c: any) => c.is_correct)
+          isCorrect = userAnswer === correctChoice?.letter
+        } else if (onePrepQ.answer_type === 'spr') {
+          isCorrect = onePrepQ.spr_answers.some((answer: string) =>
+            answer.toLowerCase().trim() === userAnswer.toLowerCase().trim()
+          )
+        }
+      }
+
+      return isCorrect ? 'correct' : 'incorrect'
+    }
+
+    return (
+      <Card className="w-full">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Grid3X3 className="h-5 w-5" />
+            Question Results
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {session.modules.map((module, moduleIndex) => (
+              <div key={`${module.subject}-${module.module}`}>
+                <div className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  {module.subject} - {module.module}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {module.questions.map((question, questionIndex) => {
+                    const questionNumber = questionIndex + 1
+                    const status = getQuestionStatus(moduleIndex, questionIndex)
+
+                    return (
+                      <button
+                        key={question.metadata.id}
+                        onClick={() => {
+                          const userAnswer = module.answers[question.metadata.id] || null
+                          setSelectedResultQuestion({
+                            moduleIndex,
+                            questionIndex,
+                            question,
+                            userAnswer,
+                            status
+                          })
+                        }}
+                        className={`
+                          w-10 h-10 rounded-md border-2 text-sm font-medium flex items-center justify-center flex-shrink-0 transition-all hover:scale-105 cursor-pointer
+                          ${status === 'correct'
+                            ? 'border-green-500 bg-green-500 text-white hover:bg-green-600'
+                            : status === 'incorrect'
+                              ? 'border-red-500 bg-red-500 text-white hover:bg-red-600'
+                              : 'border-gray-400 bg-gray-400 text-white hover:bg-gray-500'
+                          }
+                        `}
+                      >
+                        {questionNumber}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="pt-4 mt-4 border-t">
+            <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded border-2 border-green-500 bg-green-500"></div>
+                <span>Correct</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded border-2 border-red-500 bg-red-500"></div>
+                <span>Incorrect</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded border-2 border-gray-400 bg-gray-400"></div>
+                <span>Not answered</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   // Results view
   if (showResults) {
     const score = calculateScore()
@@ -638,56 +763,121 @@ export default function PracticeTestPage() {
       <div className="min-h-screen bg-background">
         <Navigation />
         <div className="container mx-auto px-4 py-8">
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl">Test Complete! 🎉</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center space-y-6">
-                <div>
-                  <div className="text-4xl font-bold text-primary mb-2">
-                    {score.percentage}%
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* Score Summary Card */}
+            <Card>
+              <CardHeader className="text-center">
+                <CardTitle className="text-2xl">Test Complete! 🎉</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center space-y-6">
+                  <div>
+                    <div className="text-4xl font-bold text-primary mb-2">
+                      {score.percentage}%
+                    </div>
+                    <div className="text-muted-foreground">
+                      {score.correct} out of {score.total} questions correct
+                    </div>
                   </div>
-                  <div className="text-muted-foreground">
-                    {score.correct} out of {score.total} questions correct
+
+                  {/* Module breakdown */}
+                  {score.byModule.length > 1 && (
+                    <div className="space-y-2">
+                      <h4 className="font-semibold">Module Results:</h4>
+                      {score.byModule.map((moduleScore, index) => (
+                        <div key={moduleScore.module} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                          <span className="text-sm">{moduleScore.module}</span>
+                          <span className="text-sm font-medium">
+                            {moduleScore.correct}/{moduleScore.total} ({Math.round((moduleScore.correct / moduleScore.total) * 100)}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="text-sm text-muted-foreground">
+                    <div>Test: {session.testName}</div>
+                    <div>Time: {formatTime(session.timeSpent)}</div>
                   </div>
-                </div>
 
-                {/* Module breakdown */}
-                {score.byModule.length > 1 && (
-                  <div className="space-y-2">
-                    <h4 className="font-semibold">Module Results:</h4>
-                    {score.byModule.map((moduleScore, index) => (
-                      <div key={moduleScore.module} className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                        <span className="text-sm">{moduleScore.module}</span>
-                        <span className="text-sm font-medium">
-                          {moduleScore.correct}/{moduleScore.total} ({Math.round((moduleScore.correct / moduleScore.total) * 100)}%)
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="text-sm text-muted-foreground">
-                  <div>Test: {session.testName}</div>
-                  <div>Time: {formatTime(session.timeSpent)}</div>
-                </div>
-
-                <div className="flex gap-2 justify-center">
-                  <Link href="/leaked-exams">
-                    <Button variant="outline">
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      Back to Tests
+                  <div className="flex gap-2 justify-center">
+                    <Link href="/leaked-exams">
+                      <Button variant="outline">
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Back to Tests
+                      </Button>
+                    </Link>
+                    <Button onClick={loadTest}>
+                      <Play className="h-4 w-4 mr-2" />
+                      Retake Test
                     </Button>
-                  </Link>
-                  <Button onClick={loadTest}>
-                    <Play className="h-4 w-4 mr-2" />
-                    Retake Test
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            {/* Results Grid */}
+            <ResultsGrid />
+          </div>
+
+          {/* Question Review Dialog */}
+          <Dialog open={!!selectedResultQuestion} onOpenChange={(open) => !open && setSelectedResultQuestion(null)}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              {selectedResultQuestion && (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <span>Question {selectedResultQuestion.questionIndex + 1}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {session.modules[selectedResultQuestion.moduleIndex].subject} - {session.modules[selectedResultQuestion.moduleIndex].module}
+                      </Badge>
+                      <Badge
+                        variant={selectedResultQuestion.status === 'correct' ? 'default' : selectedResultQuestion.status === 'incorrect' ? 'destructive' : 'secondary'}
+                        className="text-xs"
+                      >
+                        {selectedResultQuestion.status === 'correct' ? '✓ Correct' :
+                          selectedResultQuestion.status === 'incorrect' ? '✗ Incorrect' :
+                            '— Not Answered'}
+                      </Badge>
+                    </DialogTitle>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    {/* Show the question */}
+                    <QuestionCard
+                      data={selectedResultQuestion.question.question}
+                      format={selectedResultQuestion.question.format}
+                      showExplanation={true}
+                      currentAnswer={selectedResultQuestion.userAnswer}
+                      isPracticeMode={false}
+                      questionNumber={selectedResultQuestion.questionIndex + 1}
+                    />
+
+                    {/* Show user's answer */}
+                    <Card className="bg-muted/50">
+                      <CardContent className="pt-4">
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm">Your Answer:</h4>
+                          <div className="flex items-center gap-2">
+                            {selectedResultQuestion.userAnswer ? (
+                              <>
+                                <Badge variant="outline">{selectedResultQuestion.userAnswer}</Badge>
+                                <span className="text-sm text-muted-foreground">
+                                  {selectedResultQuestion.status === 'correct' ? '(Correct)' : '(Incorrect)'}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-sm text-muted-foreground italic">No answer provided</span>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
         <Footer />
       </div>

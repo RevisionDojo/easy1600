@@ -243,7 +243,7 @@ export function QuestionCardBlueBook({
               <Button
                 key={option.name}
                 variant={selectedOption === option.name ? "default" : "outline"}
-                className={`w-full justify-start text-left p-4 h-auto min-h-[3rem] ${!isPracticeMode && getChoiceStatus(option.name) === "correct"
+                className={`w-full justify-start text-left p-4 h-auto min-h-[3rem] whitespace-normal ${!isPracticeMode && getChoiceStatus(option.name) === "correct"
                   ? "bg-green-50 border-green-200 hover:bg-green-100 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/30 dark:text-green-200"
                   : !isPracticeMode && getChoiceStatus(option.name) === "incorrect"
                     ? "bg-red-50 border-red-200 hover:bg-red-100 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-900/30 dark:text-red-200"
@@ -252,18 +252,20 @@ export function QuestionCardBlueBook({
                 onClick={() => handleChoiceSelect(option.name)}
                 disabled={hasAnswered && !isPracticeMode}
               >
-                <div className="flex items-center gap-3 w-full">
-                  <span className={`font-semibold text-sm px-2 py-1 rounded ${selectedOption === option.name
-                      ? 'bg-primary-foreground text-primary'
-                      : 'bg-muted text-foreground'
+                <div className="flex items-start gap-3 w-full">
+                  <span className={`font-semibold text-sm px-2 py-1 rounded flex-shrink-0 ${selectedOption === option.name
+                    ? 'bg-primary-foreground text-primary'
+                    : 'bg-muted text-foreground'
                     }`}>
                     {option.name}
                   </span>
                   <span
-                    className="flex-1 text-sm [&_.katex]:text-current"
+                    className="flex-1 text-sm break-words [&_.katex]:text-current"
                     dangerouslySetInnerHTML={{ __html: processContent(option.content) }}
                   />
-                  {!isPracticeMode && getChoiceIcon(option.name)}
+                  <div className="flex-shrink-0">
+                    {!isPracticeMode && getChoiceIcon(option.name)}
+                  </div>
                 </div>
               </Button>
             ))}

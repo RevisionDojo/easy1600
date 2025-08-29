@@ -178,9 +178,9 @@ export default function OfficialExamsPage() {
                             {exam.modules
                               .filter((m) => m.subject === 'English')
                               .map((moduleInfo) => (
-                                <div key={moduleInfo.moduleName} className="mb-2">
+                                <div key={`${moduleInfo.subject}-${moduleInfo.moduleName}`} className="mb-2">
                                   <Link
-                                    href={`/practice-tests/${encodeURIComponent(moduleInfo.moduleName)}`}
+                                    href={`/practice-tests/${encodeURIComponent(moduleInfo.moduleName)}?source=official`}
                                   >
                                     <Button variant="outline" size="sm" className="w-full justify-start p-4">
                                       <Play className="h-4 w-4 mr-2" />
@@ -200,9 +200,9 @@ export default function OfficialExamsPage() {
                             {exam.modules
                               .filter((m) => m.subject === 'Math')
                               .map((moduleInfo) => (
-                                <div key={moduleInfo.moduleName} className="mb-2">
+                                <div key={`${moduleInfo.subject}-${moduleInfo.moduleName}`} className="mb-2">
                                   <Link
-                                    href={`/practice-tests/${encodeURIComponent(moduleInfo.moduleName)}`}
+                                    href={`/practice-tests/${encodeURIComponent(moduleInfo.moduleName)}?source=official`}
                                   >
                                     <Button variant="outline" size="sm" className="w-full justify-start p-4">
                                       <Play className="h-4 w-4 mr-2" />
@@ -220,7 +220,7 @@ export default function OfficialExamsPage() {
                         {/* Take full test button */}
                         {exam.modules.length > 1 && (
                           <div className="pt-4 border-t">
-                            <Link href={`/practice-tests/${encodeURIComponent(exam.examName)}?complete=true`}>
+                            <Link href={`/practice-tests/${encodeURIComponent(exam.examName)}?complete=true&source=official`}>
                               <Button className="w-full" size="lg">
                                 <Play className="h-4 w-4 mr-2" />
                                 Take Complete Test ({exam.totalQuestions} questions)

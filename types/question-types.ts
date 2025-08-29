@@ -144,6 +144,11 @@ export interface OnePrepQuestionProps {
   showExplanation?: boolean
   onAnswer?: (selectedChoice: OnePrepChoice, isCorrect: boolean) => void
   onReset?: () => void
+  currentAnswer?: string | null
+  onFlag?: () => void
+  isFlagged?: boolean
+  questionNumber?: number
+  isPracticeMode?: boolean
 }
 
 export interface BlueBookQuestionProps {

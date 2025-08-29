@@ -50,6 +50,11 @@ export function QuestionCard({
         showExplanation={showExplanation}
         onAnswer={onAnswer ? (choice, isCorrect) => onAnswer(choice, isCorrect) : undefined}
         onReset={onReset}
+        currentAnswer={currentAnswer}
+        onFlag={onFlag}
+        isFlagged={isFlagged}
+        questionNumber={questionNumber}
+        isPracticeMode={isPracticeMode}
       />
     )
   }
