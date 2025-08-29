@@ -13,28 +13,33 @@ import { QuestionCardProps, OnePrepQuestion, BlueBookQuestion } from "@/types/qu
  * @param onAnswer - Callback when user answers the question
  * @param onReset - Callback when user resets the question
  */
-export function QuestionCard({ 
-  data, 
-  format, 
-  showExplanation = false, 
-  onAnswer, 
-  onReset 
+export function QuestionCard({
+  data,
+  format,
+  showExplanation = false,
+  onAnswer,
+  onReset,
+  currentAnswer,
+  onFlag,
+  isFlagged,
+  questionNumber,
+  isPracticeMode
 }: QuestionCardProps) {
-  
+
   // Type guard to check if data is OnePrep format
   const isOnePrepQuestion = (question: any): question is OnePrepQuestion => {
-    return format === "oneprep" && 
-           typeof question.question_id === "number" &&
-           typeof question.answer_type === "string" &&
-           Array.isArray(question.choices)
+    return format === "oneprep" &&
+      typeof question.question_id === "number" &&
+      typeof question.answer_type === "string" &&
+      Array.isArray(question.choices)
   }
 
   // Type guard to check if data is BlueBook format  
   const isBlueBookQuestion = (question: any): question is BlueBookQuestion => {
     return format === "bluebook" &&
-           typeof question.type === "string" &&
-           typeof question.article === "string" &&
-           Array.isArray(question.options)
+      typeof question.type === "string" &&
+      typeof question.article === "string" &&
+      Array.isArray(question.options)
   }
 
   // Handle OnePrep format
@@ -57,6 +62,11 @@ export function QuestionCard({
         showExplanation={showExplanation}
         onAnswer={onAnswer ? (answer, isCorrect) => onAnswer(answer, isCorrect) : undefined}
         onReset={onReset}
+        currentAnswer={currentAnswer}
+        onFlag={onFlag}
+        isFlagged={isFlagged}
+        questionNumber={questionNumber}
+        isPracticeMode={isPracticeMode}
       />
     )
   }

@@ -87,8 +87,8 @@ export default function HomePage() {
               >
                 <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 h-full">
                   <Users className="h-12 w-12 text-primary mx-auto mb-4" />
-                  <h3 className="text-xl font-bold mb-2">SAT Suite Question Bank</h3>
-                  <p className="text-sm text-muted-foreground">Official College Board</p>
+                  <h3 className="text-xl font-bold mb-2">Question Bank</h3>
+                  <p className="text-sm text-muted-foreground">College Board + Princeton Review</p>
                 </div>
               </div>
 
@@ -98,8 +98,8 @@ export default function HomePage() {
               >
                 <div className="bg-card border-2 border-primary p-6 rounded-lg text-center hover:scale-105 hover:border-primary/80 transition-all duration-200 h-full">
                   <BookOpen className="h-12 w-12 text-primary mx-auto mb-4" />
-                  <h3 className="text-xl font-bold mb-2">ALL Official Practice Tests</h3>
-                  <p className="text-sm text-muted-foreground">Full-length exams</p>
+                  <h3 className="text-xl font-bold mb-2">Official SAT Practice</h3>
+                  <p className="text-sm text-muted-foreground">SAT Suite Official Practice</p>
                 </div>
               </div>
 

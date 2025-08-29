@@ -131,6 +131,11 @@ export interface QuestionCardProps {
   showExplanation?: boolean
   onAnswer?: (answer: string | OnePrepChoice, isCorrect: boolean) => void
   onReset?: () => void
+  currentAnswer?: string | null
+  onFlag?: () => void
+  isFlagged?: boolean
+  questionNumber?: number
+  isPracticeMode?: boolean
 }
 
 // Component-specific props
@@ -146,4 +151,9 @@ export interface BlueBookQuestionProps {
   showExplanation?: boolean
   onAnswer?: (answer: string, isCorrect: boolean) => void
   onReset?: () => void
+  currentAnswer?: string | null
+  onFlag?: () => void
+  isFlagged?: boolean
+  questionNumber?: number
+  isPracticeMode?: boolean
 }

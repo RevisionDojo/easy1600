@@ -10,15 +10,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { QuestionCard } from "@/components/question-card"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
-import { Search, Filter, BookOpen, Target, Users, ArrowLeft, Loader2, AlertCircle, RefreshCw } from "lucide-react"
+import { Search, Filter, BookOpen, Target, Users, ArrowLeft, Loader2, AlertCircle, RefreshCw, BarChart3 } from "lucide-react"
 import { SATDataService, QuestionFilters } from "@/lib/data-service"
 import {
-  mapOfficialPracticeToEnhanced,
+  mapCollegeBoardToEnhanced,
   mapPrincetonToEnhanced,
   getSourceDisplayName,
   getDifficultyColor,
   EnhancedQuestion
 } from "@/lib/question-mappers"
+import { TopicSelector, CompactTopicSelector, TopicFilters } from "@/components/topic-selector"
+import { TopicAnalytics, TopicBreadcrumb } from "@/components/topic-analytics"
 
 interface FilterOptions {
   difficulties: string[]
@@ -41,6 +43,8 @@ export default function QuestionBankPage() {
   const [selectedPrimaryClass, setSelectedPrimaryClass] = useState("All")
   const [selectedSkill, setSelectedSkill] = useState("All")
   const [selectedAnswerType, setSelectedAnswerType] = useState("All")
+  const [topicFilters, setTopicFilters] = useState<TopicFilters>({ subjects: [], topics: [], subtopics: [] })
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   // State for pagination
   const [currentPage, setCurrentPage] = useState(1)
@@ -67,10 +71,10 @@ export default function QuestionBankPage() {
         const options = await SATDataService.getFilterOptions()
         setFilterOptions({
           satSuite: {
-            difficulties: [],
-            modules: [],
-            primaryClasses: [],
-            skills: []
+            difficulties: options.collegeboard.difficulties,
+            modules: options.collegeboard.modules,
+            primaryClasses: options.collegeboard.primaryClasses,
+            skills: options.collegeboard.skills
           },
           princeton: {
             difficulties: options.princeton.difficulties,
@@ -89,7 +93,7 @@ export default function QuestionBankPage() {
   // Load questions when tab changes or filters change
   useEffect(() => {
     loadQuestions()
-  }, [activeTab, searchQuery, selectedDifficulty, selectedModule, selectedPrimaryClass, selectedSkill, selectedAnswerType, currentPage])
+  }, [activeTab, searchQuery, selectedDifficulty, selectedModule, selectedPrimaryClass, selectedSkill, selectedAnswerType, topicFilters, currentPage])
 
   const loadQuestions = async () => {
     setLoading(true)
@@ -103,16 +107,18 @@ export default function QuestionBankPage() {
         primaryClass: selectedPrimaryClass !== "All" ? [selectedPrimaryClass] : undefined,
         skill: selectedSkill !== "All" ? [selectedSkill] : undefined,
         answerType: selectedAnswerType !== "All" ? [selectedAnswerType as 'mcq' | 'spr'] : undefined,
+        topics: topicFilters.topics.length > 0 ? topicFilters.topics : undefined,
+        subtopics: topicFilters.subtopics.length > 0 ? topicFilters.subtopics : undefined,
         limit: questionsPerPage,
         offset: (currentPage - 1) * questionsPerPage
       }
 
       if (activeTab === "sat-suite") {
-        const response = await SATDataService.getOfficialPracticeQuestions(filters)
+        const response = await SATDataService.getCollegeBoardQuestions(filters)
         if (response.error) {
           setError(response.error)
         } else {
-          const enhancedQuestions = response.data.map(mapOfficialPracticeToEnhanced)
+          const enhancedQuestions = response.data.map(mapCollegeBoardToEnhanced)
           setSatSuiteQuestions(enhancedQuestions)
           setTotalCount(response.count || 0)
         }
@@ -143,6 +149,7 @@ export default function QuestionBankPage() {
     setSelectedPrimaryClass("All")
     setSelectedSkill("All")
     setSelectedAnswerType("All")
+    setTopicFilters({ subjects: [], topics: [], subtopics: [] })
     setCurrentPage(1)
   }
 
@@ -180,15 +187,26 @@ export default function QuestionBankPage() {
         <div className="text-center mb-8">
           <h1 className="text-4xl md:text-6xl font-bold mb-4">QUESTION BANK</h1>
           <p className="text-xl text-muted-foreground mb-6">
-            Practice with thousands of official SAT questions
+            Practice with thousands of SAT questions from College Board and Princeton Review
           </p>
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-2 mb-4">
             <Badge variant="default" className="text-lg px-4 py-2">
-              19,000+ QUESTIONS
+              4,300+ QUESTIONS
             </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2">
               100% FREE
             </Badge>
+          </div>
+
+          <div className="flex justify-center gap-2">
+            <Button
+              variant={showAnalytics ? "default" : "outline"}
+              onClick={() => setShowAnalytics(!showAnalytics)}
+              className="flex items-center gap-2"
+            >
+              <BarChart3 className="h-4 w-4" />
+              {showAnalytics ? "Hide" : "Show"} Analytics
+            </Button>
           </div>
         </div>
 
@@ -197,7 +215,7 @@ export default function QuestionBankPage() {
             <TabsList className="grid w-full max-w-md grid-cols-2">
               <TabsTrigger value="sat-suite" className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
-                SAT Suite (10,167)
+                College Board (3,290)
               </TabsTrigger>
               <TabsTrigger value="princeton" className="flex items-center gap-2">
                 <Target className="h-4 w-4" />
@@ -206,107 +224,123 @@ export default function QuestionBankPage() {
             </TabsList>
           </div>
 
-          {/* Filters */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                Filters
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search questions..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+          {/* Analytics */}
+          {showAnalytics && (
+            <TopicAnalytics
+              source={activeTab === "sat-suite" ? "collegeboard" : "princeton"}
+              className="mb-6"
+            />
+          )}
 
-                {/* Answer Type */}
-                <Select value={selectedAnswerType} onValueChange={setSelectedAnswerType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Answer Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Types</SelectItem>
-                    <SelectItem value="mcq">Multiple Choice</SelectItem>
-                    <SelectItem value="spr">Student Response</SelectItem>
-                  </SelectContent>
-                </Select>
+          {/* Advanced Topic Filtering */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="lg:col-span-1">
+              <TopicSelector
+                source={activeTab === "sat-suite" ? "collegeboard" : "princeton"}
+                filters={topicFilters}
+                onFiltersChange={setTopicFilters}
+              />
+            </div>
 
-                {/* Module (for Princeton) */}
-                {activeTab === "princeton" && (
-                  <Select value={selectedModule} onValueChange={setSelectedModule}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Module" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Modules</SelectItem>
-                      {currentFilterOptions.modules.map(module => (
-                        <SelectItem key={module} value={module}>{module}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Filter className="h-5 w-5" />
+                    Additional Filters
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {/* Search */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search questions..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
 
-                {/* Difficulty (for Princeton) */}
-                {activeTab === "princeton" && (
-                  <Select value={selectedDifficulty} onValueChange={setSelectedDifficulty}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Difficulty" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Difficulties</SelectItem>
-                      {currentFilterOptions.difficulties.map(diff => (
-                        <SelectItem key={diff} value={diff}>{diff}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                    {/* Answer Type */}
+                    <Select value={selectedAnswerType} onValueChange={setSelectedAnswerType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Answer Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="All">All Types</SelectItem>
+                        <SelectItem value="mcq">Multiple Choice</SelectItem>
+                        <SelectItem value="spr">Student Response</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                {/* Primary Class (for Princeton) */}
-                {activeTab === "princeton" && (
-                  <Select value={selectedPrimaryClass} onValueChange={setSelectedPrimaryClass}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Primary Class" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Classes</SelectItem>
-                      {currentFilterOptions.primaryClasses.map(cls => (
-                        <SelectItem key={cls} value={cls}>{cls}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                    {/* Module */}
+                    <Select value={selectedModule} onValueChange={setSelectedModule}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Module" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="All">All Modules</SelectItem>
+                        {currentFilterOptions.modules.map(module => (
+                          <SelectItem key={module} value={module}>{module}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-                {/* Skill (for Princeton) */}
-                {activeTab === "princeton" && (
-                  <Select value={selectedSkill} onValueChange={setSelectedSkill}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Skill" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Skills</SelectItem>
-                      {currentFilterOptions.skills.map(skill => (
-                        <SelectItem key={skill} value={skill}>{skill}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                    {/* Difficulty */}
+                    <Select value={selectedDifficulty} onValueChange={setSelectedDifficulty}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Difficulty" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="All">All Difficulties</SelectItem>
+                        {currentFilterOptions.difficulties.map(diff => (
+                          <SelectItem key={diff} value={diff}>{diff}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-                {/* Reset Filters */}
-                <Button variant="outline" onClick={resetFilters} className="flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4" />
-                  Reset
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                    {/* Primary Class (for Princeton) */}
+                    {activeTab === "princeton" && (
+                      <Select value={selectedPrimaryClass} onValueChange={setSelectedPrimaryClass}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Primary Class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="All">All Classes</SelectItem>
+                          {currentFilterOptions.primaryClasses.map(cls => (
+                            <SelectItem key={cls} value={cls}>{cls}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {/* Skill (for Princeton) */}
+                    {activeTab === "princeton" && (
+                      <Select value={selectedSkill} onValueChange={setSelectedSkill}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Skill" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="All">All Skills</SelectItem>
+                          {currentFilterOptions.skills.map(skill => (
+                            <SelectItem key={skill} value={skill}>{skill}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {/* Reset Filters */}
+                    <Button variant="outline" onClick={resetFilters} className="flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4" />
+                      Reset All
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
           {/* Error State */}
           {error && (
@@ -341,13 +375,13 @@ export default function QuestionBankPage() {
               <TabsContent value="sat-suite">
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-bold">SAT Suite Official Practice Questions</h2>
+                    <h2 className="text-2xl font-bold">College Board Question Bank</h2>
                     <div className="text-sm text-muted-foreground">
                       {totalCount.toLocaleString()} questions total
                     </div>
                   </div>
                   <p className="text-muted-foreground mb-6">
-                    Official practice questions from the College Board's SAT Suite of Assessments
+                    Official questions from the College Board's SAT question bank
                   </p>
                 </div>
 
@@ -449,8 +483,15 @@ export default function QuestionBankPage() {
                           <CardDescription>
                             {getSourceDisplayName(enhancedQuestion.metadata.source)}
                             {enhancedQuestion.metadata.module && ` • ${enhancedQuestion.metadata.module}`}
-                            {enhancedQuestion.metadata.skill && ` • ${enhancedQuestion.metadata.skill}`}
                           </CardDescription>
+                          {enhancedQuestion.metadata.topicInfo && (
+                            <TopicBreadcrumb
+                              subject={enhancedQuestion.metadata.topicInfo.subject}
+                              topic={enhancedQuestion.metadata.topicInfo.topic}
+                              subtopic={enhancedQuestion.metadata.topicInfo.subtopic}
+                              source={enhancedQuestion.metadata.source}
+                            />
+                          )}
                         </CardHeader>
                         <CardContent>
                           <p className="text-sm line-clamp-3 mb-4">

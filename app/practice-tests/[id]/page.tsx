@@ -8,17 +8,30 @@ import { Progress } from "@/components/ui/progress"
 import { QuestionCard } from "@/components/question-card"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
-import { Clock, ArrowLeft, ArrowRight, Flag, CheckCircle, Target, Loader2, AlertCircle, Play, Pause } from "lucide-react"
+import { Clock, ArrowLeft, ArrowRight, Flag, CheckCircle, Target, Loader2, AlertCircle, Play, Pause, BookOpen, Grid3X3 } from "lucide-react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { SATDataService } from "@/lib/data-service"
-import { mapBluebookToEnhanced, EnhancedQuestion } from "@/lib/question-mappers"
+import { mapBluebookToEnhanced, mapOfficialPracticeToEnhanced, EnhancedQuestion } from "@/lib/question-mappers"
+
+interface ModuleSection {
+  subject: string
+  module: string
+  questions: EnhancedQuestion[]
+  startIndex: number // Global index where this module starts
+  answers: Record<string, string | null>
+  flagged: Record<string, boolean> // Track flagged questions
+  isCompleted: boolean
+}
 
 interface TestSession {
   testName: string
-  questions: EnhancedQuestion[]
-  currentQuestionIndex: number
-  answers: Record<string, string | null>
+  isCompleteExam: boolean
+  modules: ModuleSection[]
+  currentModuleIndex: number
+  currentQuestionIndex: number // Index within current module
+  globalQuestionIndex: number // Global index across all modules
+  totalQuestions: number
   startTime: number
   timeSpent: number
   isCompleted: boolean
@@ -27,7 +40,10 @@ interface TestSession {
 
 export default function PracticeTestPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const testName = decodeURIComponent(params.id as string)
+  const subject = searchParams.get('subject')
+  const isCompleteExam = searchParams.get('complete') === 'true'
 
   const [session, setSession] = useState<TestSession | null>(null)
   const [loading, setLoading] = useState(true)
@@ -36,7 +52,7 @@ export default function PracticeTestPage() {
 
   useEffect(() => {
     loadTest()
-  }, [testName])
+  }, [testName, subject, isCompleteExam])
 
   useEffect(() => {
     if (!session || session.isCompleted || session.isPaused) return
@@ -56,7 +72,37 @@ export default function PracticeTestPage() {
     setError(null)
 
     try {
-      const response = await SATDataService.getBluebookTestById(testName)
+      let response
+      let displayName = testName
+      let isOfficialPractice = false
+
+      if (isCompleteExam) {
+        // Load complete exam (both subjects)
+        response = await SATDataService.getBluebookCompleteExam(testName)
+        displayName = `${testName} (Complete Exam)`
+      } else if (subject) {
+        // Load specific subject only
+        response = await SATDataService.getBluebookTestById(testName, subject)
+        displayName = `${testName} - ${subject}`
+      } else {
+        // Try Bluebook first
+        response = await SATDataService.getBluebookTestById(testName)
+
+        // If no Bluebook test found, try Official Practice
+        if (!response.error && response.data.length === 0) {
+          // Check if this is a complete test request
+          const isCompleteOfficialTest = searchParams.get('complete') === 'true'
+
+          if (isCompleteOfficialTest) {
+            response = await SATDataService.getOfficialPracticeCompleteExam(testName)
+          } else {
+            response = await SATDataService.getOfficialPracticeExamById(testName)
+          }
+
+          isOfficialPractice = true
+          displayName = `${testName} (Official Practice)`
+        }
+      }
 
       if (response.error) {
         setError(response.error)
@@ -68,13 +114,146 @@ export default function PracticeTestPage() {
         return
       }
 
-      const enhancedQuestions = response.data.map(mapBluebookToEnhanced)
+      const enhancedQuestions = isOfficialPractice
+        ? (response.data as any[]).map(mapOfficialPracticeToEnhanced)
+        : (response.data as any[]).map(mapBluebookToEnhanced)
+
+      // Group questions by subject and module
+      const moduleGroups: Record<string, EnhancedQuestion[]> = {}
+
+      if (isOfficialPractice) {
+        // For official practice tests, group by exam_name (which contains module info)
+        enhancedQuestions.forEach(question => {
+          const originalQuestion = response.data.find(q => (q as any).question_id === (question.question as any).question_id) as any
+          if (originalQuestion && originalQuestion.exam_name) {
+            const examName = originalQuestion.exam_name
+            const key = examName // Use full exam name as key
+
+            if (!moduleGroups[key]) {
+              moduleGroups[key] = []
+            }
+            moduleGroups[key].push(question)
+          }
+        })
+      } else {
+        // For Bluebook tests, group by subject and module
+        enhancedQuestions.forEach(question => {
+          const originalQuestion = response.data.find(q => q.id === question.metadata.id) as any
+          if (originalQuestion) {
+            const subject = originalQuestion.subject
+            const module = originalQuestion.module || 'module1'
+            const key = `${subject}-${module}`
+
+            if (!moduleGroups[key]) {
+              moduleGroups[key] = []
+            }
+            moduleGroups[key].push(question)
+          }
+        })
+      }
+
+      // Create ordered modules based on the test type
+      const modules: ModuleSection[] = []
+      let globalIndex = 0
+
+      if (isOfficialPractice) {
+        // For official practice tests, create modules from grouped exam names
+        Object.entries(moduleGroups).forEach(([examName, questions]) => {
+          // Parse the exam name to get subject and module info
+          const name = examName.toLowerCase()
+          let subject = 'Unknown'
+          let module = 'Module 1' // Default to Module 1
+
+          if (name.includes('english')) {
+            subject = 'English'
+          } else if (name.includes('math')) {
+            subject = 'Math'
+          }
+
+          if (name.includes('module 1')) {
+            module = 'Module 1'
+          } else if (name.includes('module 2')) {
+            if (name.includes('easy')) {
+              module = 'Module 2 (Easy)'
+            } else if (name.includes('hard')) {
+              module = 'Module 2 (Hard)'
+            } else {
+              module = 'Module 2'
+            }
+          }
+
+          modules.push({
+            subject,
+            module,
+            questions: questions,
+            startIndex: globalIndex,
+            answers: {},
+            flagged: {},
+            isCompleted: false
+          })
+          globalIndex += questions.length
+        })
+
+        // Sort modules: English first, then Math, then by module number
+        modules.sort((a, b) => {
+          if (a.subject !== b.subject) {
+            return a.subject === 'English' ? -1 : 1
+          }
+          return a.module.localeCompare(b.module)
+        })
+      } else if (isCompleteExam) {
+        // Complete exam order: English M1 → English M2 → Math M1 → Math M2
+        const subjectOrder = ['English', 'Math']
+        const moduleOrder = ['module1', 'module2']
+
+        subjectOrder.forEach(subj => {
+          moduleOrder.forEach(mod => {
+            const key = `${subj}-${mod}`
+            if (moduleGroups[key] && moduleGroups[key].length > 0) {
+              modules.push({
+                subject: subj,
+                module: mod,
+                questions: moduleGroups[key],
+                startIndex: globalIndex,
+                answers: {},
+                flagged: {},
+                isCompleted: false
+              })
+              globalIndex += moduleGroups[key].length
+            }
+          })
+        })
+      } else {
+        // Single subject: Module 1 → Module 2
+        const moduleOrder = ['module1', 'module2']
+
+        moduleOrder.forEach(mod => {
+          Object.keys(moduleGroups).forEach(key => {
+            if (key.endsWith(`-${mod}`) && moduleGroups[key].length > 0) {
+              const subjectName = key.split('-')[0]
+              modules.push({
+                subject: subjectName,
+                module: mod,
+                questions: moduleGroups[key],
+                startIndex: globalIndex,
+                answers: {},
+                flagged: {},
+                isCompleted: false
+              })
+              globalIndex += moduleGroups[key].length
+            }
+          })
+        })
+      }
 
       setSession({
-        testName,
-        questions: enhancedQuestions,
+        testName: displayName,
+        isCompleteExam,
+        modules,
+        currentModuleIndex: 0,
         currentQuestionIndex: 0,
-        answers: {},
+        globalQuestionIndex: 0,
+        totalQuestions: globalIndex,
         startTime: Date.now(),
         timeSpent: 0,
         isCompleted: false,
@@ -88,43 +267,108 @@ export default function PracticeTestPage() {
   }
 
   const handleAnswer = (answer: any, isCorrect: boolean) => {
-    if (!session) return
+    if (!session || !session.modules[session.currentModuleIndex]) return
 
-    const questionId = session.questions[session.currentQuestionIndex].metadata.id
-    setSession(prev => prev ? {
-      ...prev,
-      answers: {
-        ...prev.answers,
-        [questionId]: typeof answer === 'object' ? answer.letter : answer
+    const currentModule = session.modules[session.currentModuleIndex]
+    const questionId = currentModule.questions[session.currentQuestionIndex].metadata.id
+    const answerValue = typeof answer === 'object' ? answer.letter : answer
+
+    setSession(prev => {
+      if (!prev) return null
+
+      const newModules = [...prev.modules]
+      newModules[prev.currentModuleIndex] = {
+        ...newModules[prev.currentModuleIndex],
+        answers: {
+          ...newModules[prev.currentModuleIndex].answers,
+          [questionId]: answerValue
+        }
       }
-    } : null)
+
+      return {
+        ...prev,
+        modules: newModules
+      }
+    })
   }
 
   const goToNextQuestion = () => {
     if (!session) return
 
-    if (session.currentQuestionIndex < session.questions.length - 1) {
+    const currentModule = session.modules[session.currentModuleIndex]
+
+    if (session.currentQuestionIndex < currentModule.questions.length - 1) {
+      // Move to next question in current module
       setSession(prev => prev ? {
         ...prev,
-        currentQuestionIndex: prev.currentQuestionIndex + 1
+        currentQuestionIndex: prev.currentQuestionIndex + 1,
+        globalQuestionIndex: prev.globalQuestionIndex + 1
       } : null)
     } else {
-      // Test completed
-      setSession(prev => prev ? {
-        ...prev,
-        isCompleted: true
-      } : null)
-      setShowResults(true)
+      // End of current module
+      if (session.currentModuleIndex < session.modules.length - 1) {
+        // Move to next module
+        setSession(prev => {
+          if (!prev) return null
+
+          const newModules = [...prev.modules]
+          newModules[prev.currentModuleIndex].isCompleted = true
+
+          return {
+            ...prev,
+            modules: newModules,
+            currentModuleIndex: prev.currentModuleIndex + 1,
+            currentQuestionIndex: 0,
+            globalQuestionIndex: prev.globalQuestionIndex + 1
+          }
+        })
+      } else {
+        // Test completed
+        setSession(prev => {
+          if (!prev) return null
+
+          const newModules = [...prev.modules]
+          newModules[prev.currentModuleIndex].isCompleted = true
+
+          return {
+            ...prev,
+            modules: newModules,
+            isCompleted: true
+          }
+        })
+        setShowResults(true)
+      }
     }
   }
 
   const goToPreviousQuestion = () => {
-    if (!session || session.currentQuestionIndex === 0) return
+    if (!session) return
 
-    setSession(prev => prev ? {
-      ...prev,
-      currentQuestionIndex: prev.currentQuestionIndex - 1
-    } : null)
+    if (session.currentQuestionIndex > 0) {
+      // Move to previous question in current module
+      setSession(prev => prev ? {
+        ...prev,
+        currentQuestionIndex: prev.currentQuestionIndex - 1,
+        globalQuestionIndex: prev.globalQuestionIndex - 1
+      } : null)
+    } else if (session.currentModuleIndex > 0) {
+      // Move to previous module
+      const prevModule = session.modules[session.currentModuleIndex - 1]
+      setSession(prev => {
+        if (!prev) return null
+
+        const newModules = [...prev.modules]
+        newModules[prev.currentModuleIndex - 1].isCompleted = false
+
+        return {
+          ...prev,
+          modules: newModules,
+          currentModuleIndex: prev.currentModuleIndex - 1,
+          currentQuestionIndex: prevModule.questions.length - 1,
+          globalQuestionIndex: prev.globalQuestionIndex - 1
+        }
+      })
+    }
   }
 
   const togglePause = () => {
@@ -134,6 +378,62 @@ export default function PracticeTestPage() {
       ...prev,
       isPaused: !prev.isPaused,
       startTime: !prev.isPaused ? prev.startTime : Date.now() - prev.timeSpent
+    } : null)
+  }
+
+  const toggleFlag = (questionId?: string) => {
+    if (!session) return
+
+    const currentModule = session.modules[session.currentModuleIndex]
+    const targetQuestionId = questionId || currentModule.questions[session.currentQuestionIndex].metadata.id
+
+    setSession(prev => {
+      if (!prev) return null
+
+      const newModules = [...prev.modules]
+      const moduleIndex = newModules.findIndex(m =>
+        m.questions.some(q => q.metadata.id === targetQuestionId)
+      )
+
+      if (moduleIndex !== -1) {
+        newModules[moduleIndex] = {
+          ...newModules[moduleIndex],
+          flagged: {
+            ...newModules[moduleIndex].flagged,
+            [targetQuestionId]: !newModules[moduleIndex].flagged[targetQuestionId]
+          }
+        }
+      }
+
+      return {
+        ...prev,
+        modules: newModules
+      }
+    })
+  }
+
+  const goToQuestion = (moduleIndex: number, questionIndex: number) => {
+    if (!session) return
+
+    // Mark current module as incomplete if we're navigating backwards
+    const newModules = [...session.modules]
+    if (moduleIndex < session.currentModuleIndex) {
+      newModules[session.currentModuleIndex].isCompleted = false
+    }
+
+    // Calculate global question index
+    let globalIndex = 0
+    for (let i = 0; i < moduleIndex; i++) {
+      globalIndex += session.modules[i].questions.length
+    }
+    globalIndex += questionIndex
+
+    setSession(prev => prev ? {
+      ...prev,
+      modules: newModules,
+      currentModuleIndex: moduleIndex,
+      currentQuestionIndex: questionIndex,
+      globalQuestionIndex: globalIndex
     } : null)
   }
 
@@ -150,28 +450,130 @@ export default function PracticeTestPage() {
   }
 
   const calculateScore = () => {
-    if (!session) return { correct: 0, total: 0, percentage: 0 }
+    if (!session) return { correct: 0, total: 0, percentage: 0, byModule: [] }
 
     let correct = 0
-    const total = session.questions.length
+    const total = session.totalQuestions
+    const moduleScores: Array<{ module: string, correct: number, total: number }> = []
 
-    session.questions.forEach(question => {
-      const questionId = question.metadata.id
-      const userAnswer = session.answers[questionId]
+    session.modules.forEach(module => {
+      let moduleCorrect = 0
 
-      if (question.format === 'bluebook') {
-        const bluebookQ = question.question as any
-        if (userAnswer === bluebookQ.correct) {
-          correct++
+      module.questions.forEach(question => {
+        const questionId = question.metadata.id
+        const userAnswer = module.answers[questionId]
+
+        if (question.format === 'bluebook') {
+          const bluebookQ = question.question as any
+          if (userAnswer === bluebookQ.correct) {
+            moduleCorrect++
+            correct++
+          }
         }
-      }
+      })
+
+      moduleScores.push({
+        module: `${module.subject} ${module.module}`,
+        correct: moduleCorrect,
+        total: module.questions.length
+      })
     })
 
     return {
       correct,
       total,
-      percentage: Math.round((correct / total) * 100)
+      percentage: Math.round((correct / total) * 100),
+      byModule: moduleScores
     }
+  }
+
+  const getCurrentAnsweredCount = () => {
+    if (!session) return 0
+
+    return session.modules.reduce((total, module) =>
+      total + Object.keys(module.answers).length, 0
+    )
+  }
+
+  // Question Grid Component
+  const QuestionGrid = () => {
+    if (!session) return null
+
+    return (
+      <Card className="w-full">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Grid3X3 className="h-5 w-5" />
+            Question Navigator
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {session.modules.map((module, moduleIndex) => (
+              <div key={`${module.subject}-${module.module}`}>
+                <div className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  {module.subject} - {module.module}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {module.questions.map((question, questionIndex) => {
+                    const questionId = question.metadata.id
+                    const isAnswered = !!module.answers[questionId]
+                    const isFlagged = !!module.flagged[questionId]
+                    const isCurrent = moduleIndex === session.currentModuleIndex &&
+                      questionIndex === session.currentQuestionIndex
+                    const questionNumber = questionIndex + 1
+
+                    return (
+                      <button
+                        key={questionId}
+                        onClick={() => goToQuestion(moduleIndex, questionIndex)}
+                        className={`
+                          relative w-10 h-10 rounded-md border-2 text-sm font-medium transition-all flex-shrink-0
+                          ${isCurrent
+                            ? 'border-primary bg-primary text-primary-foreground ring-2 ring-primary/20'
+                            : isAnswered
+                              ? 'border-green-500 bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20'
+                              : 'border-muted-foreground/30 bg-background hover:border-primary/50 hover:bg-muted/50'
+                          }
+                        `}
+                      >
+                        <span className="relative z-10">{questionNumber}</span>
+                        {isFlagged && (
+                          <Flag className="absolute -top-1 -right-1 h-3 w-3 text-amber-500 fill-amber-500" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="pt-4 mt-4 border-t">
+            <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded border-2 border-primary bg-primary"></div>
+                <span>Current question</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded border-2 border-green-500 bg-green-500/10"></div>
+                <span>Answered</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded border-2 border-muted-foreground/30"></div>
+                <span>Not answered</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Flag className="h-3 w-3 text-amber-500 fill-amber-500" />
+                <span>Flagged for review</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   // Loading state
@@ -206,7 +608,7 @@ export default function PracticeTestPage() {
               </div>
               <p className="text-sm text-muted-foreground mb-4">{error}</p>
               <div className="flex gap-2">
-                <Link href="/official-exams">
+                <Link href="/leaked-exams">
                   <Button variant="outline">
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     Back to Tests
@@ -251,13 +653,28 @@ export default function PracticeTestPage() {
                   </div>
                 </div>
 
+                {/* Module breakdown */}
+                {score.byModule.length > 1 && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold">Module Results:</h4>
+                    {score.byModule.map((moduleScore, index) => (
+                      <div key={moduleScore.module} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                        <span className="text-sm">{moduleScore.module}</span>
+                        <span className="text-sm font-medium">
+                          {moduleScore.correct}/{moduleScore.total} ({Math.round((moduleScore.correct / moduleScore.total) * 100)}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="text-sm text-muted-foreground">
                   <div>Test: {session.testName}</div>
                   <div>Time: {formatTime(session.timeSpent)}</div>
                 </div>
 
                 <div className="flex gap-2 justify-center">
-                  <Link href="/official-exams">
+                  <Link href="/leaked-exams">
                     <Button variant="outline">
                       <ArrowLeft className="h-4 w-4 mr-2" />
                       Back to Tests
@@ -277,8 +694,12 @@ export default function PracticeTestPage() {
     )
   }
 
-  const currentQuestion = session.questions[session.currentQuestionIndex]
-  const progress = ((session.currentQuestionIndex + 1) / session.questions.length) * 100
+  if (!session.modules[session.currentModuleIndex]) {
+    return null
+  }
+
+  const currentModule = session.modules[session.currentModuleIndex]
+  const currentQuestion = currentModule.questions[session.currentQuestionIndex]
 
   return (
     <div className="min-h-screen bg-background">
@@ -289,7 +710,7 @@ export default function PracticeTestPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <Link href="/official-exams">
+              <Link href="/leaked-exams">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Exit Test
@@ -297,9 +718,15 @@ export default function PracticeTestPage() {
               </Link>
               <div>
                 <h1 className="text-xl font-bold">{session.testName}</h1>
-                <p className="text-sm text-muted-foreground">
-                  Question {session.currentQuestionIndex + 1} of {session.questions.length}
-                </p>
+                <div className="text-sm text-muted-foreground">
+                  <div>{session.modules[session.currentModuleIndex].subject} - {session.modules[session.currentModuleIndex].module}</div>
+                  <div>
+                    Question {session.currentQuestionIndex + 1} of {session.modules[session.currentModuleIndex].questions.length}
+                    {session.modules.length > 1 && (
+                      <span> • Module {session.currentModuleIndex + 1} of {session.modules.length}</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -330,7 +757,13 @@ export default function PracticeTestPage() {
             </div>
           </div>
 
-          <Progress value={progress} className="h-2" />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Test Progress</span>
+              <span>{getCurrentAnsweredCount()} of {session.totalQuestions} answered</span>
+            </div>
+            <Progress value={(getCurrentAnsweredCount() / session.totalQuestions) * 100} className="h-2" />
+          </div>
         </div>
 
         {/* Question */}
@@ -350,11 +783,34 @@ export default function PracticeTestPage() {
           </Card>
         ) : (
           <div className="max-w-4xl mx-auto">
+            {/* Module info banner */}
+            <Card className="mb-6">
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-5 w-5 text-primary" />
+                    <span className="font-semibold">
+                      {session.modules[session.currentModuleIndex].subject} - {session.modules[session.currentModuleIndex].module}
+                    </span>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {Object.keys(session.modules[session.currentModuleIndex].answers).length} of {session.modules[session.currentModuleIndex].questions.length} answered
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <QuestionCard
-              data={currentQuestion.question}
-              format={currentQuestion.format}
+              key={session.modules[session.currentModuleIndex].questions[session.currentQuestionIndex].metadata.id}
+              data={session.modules[session.currentModuleIndex].questions[session.currentQuestionIndex].question}
+              format={session.modules[session.currentModuleIndex].questions[session.currentQuestionIndex].format}
               showExplanation={false}
               onAnswer={handleAnswer}
+              currentAnswer={session.modules[session.currentModuleIndex].answers[session.modules[session.currentModuleIndex].questions[session.currentQuestionIndex].metadata.id]}
+              onFlag={() => toggleFlag()}
+              isFlagged={!!session.modules[session.currentModuleIndex].flagged[session.modules[session.currentModuleIndex].questions[session.currentQuestionIndex].metadata.id]}
+              questionNumber={session.currentQuestionIndex + 1}
+              isPracticeMode={true}
             />
 
             {/* Navigation */}
@@ -362,23 +818,32 @@ export default function PracticeTestPage() {
               <Button
                 variant="outline"
                 onClick={goToPreviousQuestion}
-                disabled={session.currentQuestionIndex === 0}
+                disabled={session.currentQuestionIndex === 0 && session.currentModuleIndex === 0}
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Previous
               </Button>
 
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {Object.keys(session.answers).length} of {session.questions.length} answered
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span>
+                  Question {session.currentQuestionIndex + 1} of {session.modules[session.currentModuleIndex].questions.length}
                 </span>
+                <Badge variant="outline">
+                  {session.modules[session.currentModuleIndex].subject} - {session.modules[session.currentModuleIndex].module}
+                </Badge>
               </div>
 
               <Button onClick={goToNextQuestion}>
-                {session.currentQuestionIndex === session.questions.length - 1 ? (
+                {session.currentModuleIndex === session.modules.length - 1 &&
+                  session.currentQuestionIndex === session.modules[session.currentModuleIndex].questions.length - 1 ? (
                   <>
                     <CheckCircle className="h-4 w-4 mr-2" />
                     Finish Test
+                  </>
+                ) : session.currentQuestionIndex === session.modules[session.currentModuleIndex].questions.length - 1 ? (
+                  <>
+                    Next Module
+                    <ArrowRight className="h-4 w-4 ml-2" />
                   </>
                 ) : (
                   <>
@@ -387,6 +852,11 @@ export default function PracticeTestPage() {
                   </>
                 )}
               </Button>
+            </div>
+
+            {/* Question Navigator Grid */}
+            <div className="mt-6">
+              <QuestionGrid />
             </div>
           </div>
         )}

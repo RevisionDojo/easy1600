@@ -7,6 +7,7 @@ import {
     OnePrepChoice,
     BlueBookOption
 } from '@/types/question-types'
+import { TopicMappingService } from '@/lib/topic-mapping'
 
 /**
  * Map Official Practice Questions to OnePrep format for components
@@ -96,6 +97,14 @@ export interface EnhancedQuestion {
         subject?: string
         testName?: string
         questionOrder?: number
+        // Enhanced topic information
+        topicInfo?: {
+            subject: string
+            topic: string
+            subtopic: string
+            description?: string
+            topicDescription?: string
+        }
     }
 }
 
@@ -118,6 +127,8 @@ export function mapOfficialPracticeToEnhanced(question: OfficialPracticeQuestion
  * Map Princeton Question to Enhanced Question
  */
 export function mapPrincetonToEnhanced(question: OpQuestionBankQuestion): EnhancedQuestion {
+    const topicInfo = TopicMappingService.getPrincetonTopic(question.meta)
+
     return {
         question: mapOpQuestionBankToOnePrep(question),
         format: 'oneprep',
@@ -127,7 +138,8 @@ export function mapPrincetonToEnhanced(question: OpQuestionBankQuestion): Enhanc
             difficulty: question.difficulty || undefined,
             module: question.module || undefined,
             primaryClass: question.primary_class || undefined,
-            skill: question.skill || undefined
+            skill: question.skill || undefined,
+            topicInfo
         }
     }
 }
@@ -136,6 +148,10 @@ export function mapPrincetonToEnhanced(question: OpQuestionBankQuestion): Enhanc
  * Map College Board Question to Enhanced Question
  */
 export function mapCollegeBoardToEnhanced(question: OpQuestionBankQuestion): EnhancedQuestion {
+    const topicInfo = question.module && question.primary_class && question.skill
+        ? TopicMappingService.getCollegeBoardTopic(question.module, question.primary_class, question.skill)
+        : null
+
     return {
         question: mapOpQuestionBankToOnePrep(question),
         format: 'oneprep',
@@ -145,7 +161,8 @@ export function mapCollegeBoardToEnhanced(question: OpQuestionBankQuestion): Enh
             difficulty: question.difficulty || undefined,
             module: question.module || undefined,
             primaryClass: question.primary_class || undefined,
-            skill: question.skill || undefined
+            skill: question.skill || undefined,
+            topicInfo
         }
     }
 }

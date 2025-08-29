@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { CheckCircle, XCircle, AlertCircle, Edit3, ImageIcon } from "lucide-react"
+import { CheckCircle, XCircle, AlertCircle, Edit3, ImageIcon, Flag } from "lucide-react"
 import { BlueBookQuestion, BlueBookQuestionProps } from "@/types/question-types"
 import 'katex/dist/katex.min.css'
 
@@ -15,11 +15,16 @@ if (typeof window !== 'undefined') {
   import('katex').then(k => { katex = k.default })
 }
 
-export function QuestionCardBlueBook({ 
-  question, 
-  showExplanation = false, 
-  onAnswer, 
-  onReset 
+export function QuestionCardBlueBook({
+  question,
+  showExplanation = false,
+  onAnswer,
+  onReset,
+  currentAnswer,
+  onFlag,
+  isFlagged,
+  questionNumber,
+  isPracticeMode = false
 }: BlueBookQuestionProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [writeAnswer, setWriteAnswer] = useState("")
@@ -27,12 +32,38 @@ export function QuestionCardBlueBook({
   const [hasAnswered, setHasAnswered] = useState(false)
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
 
+  // Initialize with current answer if provided
+  useEffect(() => {
+    if (currentAnswer) {
+      if (question.type === "choice") {
+        setSelectedOption(currentAnswer)
+      } else if (question.type === "write") {
+        setWriteAnswer(currentAnswer)
+      }
+      // In practice mode, don't show results or mark as answered
+      if (!isPracticeMode) {
+        setHasAnswered(true)
+        setShowResult(true)
+      }
+    } else {
+      // Reset state when no current answer
+      setSelectedOption(null)
+      setWriteAnswer("")
+      setHasAnswered(false)
+      setShowResult(false)
+    }
+  }, [currentAnswer, question.type, isPracticeMode])
+
   const handleChoiceSelect = (optionName: string) => {
-    if (hasAnswered) return
+    if (hasAnswered && !isPracticeMode) return
 
     setSelectedOption(optionName)
-    setShowResult(true)
-    setHasAnswered(true)
+
+    // In practice mode, don't show results immediately
+    if (!isPracticeMode) {
+      setShowResult(true)
+      setHasAnswered(true)
+    }
 
     const selectedOptionData = question.options.find(opt => opt.name === optionName)
     const isCorrect = selectedOptionData?.content.trim() === question.correct.trim()
@@ -43,18 +74,21 @@ export function QuestionCardBlueBook({
   }
 
   const handleWriteSubmit = () => {
-    if (hasAnswered || !writeAnswer.trim()) return
+    if ((hasAnswered && !isPracticeMode) || !writeAnswer.trim()) return
 
     // Check if answer matches any of the accepted formats
     const normalizedAnswer = writeAnswer.trim().toLowerCase()
     const normalizedCorrect = question.correct.toLowerCase()
-    
+
     // Handle multiple correct answer formats (comma-separated)
     const correctAnswers = normalizedCorrect.split(',').map(ans => ans.trim())
     const isCorrect = correctAnswers.includes(normalizedAnswer)
 
-    setShowResult(true)
-    setHasAnswered(true)
+    // In practice mode, don't show results immediately
+    if (!isPracticeMode) {
+      setShowResult(true)
+      setHasAnswered(true)
+    }
 
     if (onAnswer) {
       onAnswer(writeAnswer, isCorrect)
@@ -71,12 +105,12 @@ export function QuestionCardBlueBook({
 
   const getChoiceStatus = (optionName: string) => {
     if (!showResult) return "default"
-    
+
     const option = question.options.find(opt => opt.name === optionName)
     if (!option) return "default"
-    
+
     const isCorrectOption = option.content.trim() === question.correct.trim()
-    
+
     if (isCorrectOption) return "correct"
     if (selectedOption === optionName && !isCorrectOption) return "incorrect"
     return "default"
@@ -91,11 +125,11 @@ export function QuestionCardBlueBook({
 
   const getWriteResult = () => {
     if (!showResult || question.type !== "write") return null
-    
+
     const normalizedAnswer = writeAnswer.trim().toLowerCase()
     const normalizedCorrect = question.correct.toLowerCase()
     const correctAnswers = normalizedCorrect.split(',').map(ans => ans.trim())
-    
+
     return correctAnswers.includes(normalizedAnswer)
   }
 
@@ -110,7 +144,7 @@ export function QuestionCardBlueBook({
           .replace(/\\left/g, '\\left')
           .replace(/\\right/g, '\\right')
           .replace(/\\frac/g, '\\frac')
-        
+
         const rendered = katex.renderToString(decodedLatex, {
           throwOnError: false,
           displayMode: false
@@ -131,7 +165,7 @@ export function QuestionCardBlueBook({
   // Process content to handle images and math
   const processContent = (content: string) => {
     let processed = processLatexContent(content)
-    
+
     // Add error handling for images
     processed = processed.replace(/<img([^>]+)src="([^"]+)"([^>]*)>/g, (match, before, src, after) => {
       if (imageErrors.has(src)) {
@@ -154,7 +188,7 @@ export function QuestionCardBlueBook({
           Image unavailable
         </div>`
     })
-    
+
     return processed
   }
 
@@ -163,18 +197,33 @@ export function QuestionCardBlueBook({
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-balance">
-            {question.type === "write" ? "Student Response" : "Multiple Choice"}
+            {question.type === "write" ? "Student Response" : `Question ${questionNumber || 1}`}
           </CardTitle>
-          <Badge variant="secondary" className="text-xs">
-            {question.type.toUpperCase()}
-          </Badge>
+          {onFlag && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onFlag}
+              className={`${isFlagged ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:hover:bg-amber-900/30 dark:text-amber-200' : ''
+                }`}
+            >
+              <Flag className={`h-4 w-4 mr-2 ${isFlagged ? 'fill-amber-500 text-amber-500' : ''
+                }`} />
+              <span className="hidden sm:inline">
+                {isFlagged ? 'Unflag' : 'Flag for Review'}
+              </span>
+              <span className="sm:hidden">
+                {isFlagged ? 'Unflag' : 'Flag'}
+              </span>
+            </Button>
+          )}
         </div>
       </CardHeader>
 
       <CardContent className="space-y-6">
         {/* Question Content */}
         <div className="prose prose-sm max-w-none">
-          <div 
+          <div
             className="text-foreground leading-relaxed text-pretty [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:border [&_img]:shadow-sm"
             dangerouslySetInnerHTML={{ __html: processContent(question.article) }}
           />
@@ -194,25 +243,27 @@ export function QuestionCardBlueBook({
               <Button
                 key={option.name}
                 variant={selectedOption === option.name ? "default" : "outline"}
-                className={`w-full justify-start text-left p-4 h-auto min-h-[3rem] ${
-                  getChoiceStatus(option.name) === "correct"
-                    ? "bg-green-50 border-green-200 hover:bg-green-100 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/30 dark:text-green-200"
-                    : getChoiceStatus(option.name) === "incorrect"
-                      ? "bg-red-50 border-red-200 hover:bg-red-100 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-900/30 dark:text-red-200"
-                      : ""
-                }`}
+                className={`w-full justify-start text-left p-4 h-auto min-h-[3rem] ${!isPracticeMode && getChoiceStatus(option.name) === "correct"
+                  ? "bg-green-50 border-green-200 hover:bg-green-100 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/30 dark:text-green-200"
+                  : !isPracticeMode && getChoiceStatus(option.name) === "incorrect"
+                    ? "bg-red-50 border-red-200 hover:bg-red-100 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-900/30 dark:text-red-200"
+                    : ""
+                  }`}
                 onClick={() => handleChoiceSelect(option.name)}
-                disabled={hasAnswered}
+                disabled={hasAnswered && !isPracticeMode}
               >
                 <div className="flex items-center gap-3 w-full">
-                  <span className="font-semibold text-sm bg-muted px-2 py-1 rounded">
+                  <span className={`font-semibold text-sm px-2 py-1 rounded ${selectedOption === option.name
+                      ? 'bg-primary-foreground text-primary'
+                      : 'bg-muted text-foreground'
+                    }`}>
                     {option.name}
                   </span>
-                  <span 
-                    className="flex-1 text-sm [&_.katex]:text-current" 
-                    dangerouslySetInnerHTML={{ __html: processContent(option.content) }} 
+                  <span
+                    className="flex-1 text-sm [&_.katex]:text-current"
+                    dangerouslySetInnerHTML={{ __html: processContent(option.content) }}
                   />
-                  {getChoiceIcon(option.name)}
+                  {!isPracticeMode && getChoiceIcon(option.name)}
                 </div>
               </Button>
             ))}
@@ -232,17 +283,17 @@ export function QuestionCardBlueBook({
                 placeholder="Enter your answer..."
                 value={writeAnswer}
                 onChange={(e) => setWriteAnswer(e.target.value)}
-                disabled={hasAnswered}
+                disabled={hasAnswered && !isPracticeMode}
                 className="flex-1"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !hasAnswered && writeAnswer.trim()) {
+                  if (e.key === "Enter" && !(hasAnswered && !isPracticeMode) && writeAnswer.trim()) {
                     handleWriteSubmit()
                   }
                 }}
               />
               <Button
                 onClick={handleWriteSubmit}
-                disabled={hasAnswered || !writeAnswer.trim()}
+                disabled={(hasAnswered && !isPracticeMode) || !writeAnswer.trim()}
                 className="px-6"
               >
                 Submit
@@ -255,10 +306,10 @@ export function QuestionCardBlueBook({
         )}
 
         {/* Result and Explanation */}
-        {showResult && (
+        {showResult && !isPracticeMode && (
           <div className="space-y-4 pt-4 border-t">
             <div className="flex items-center gap-2">
-              {(question.type === "choice" 
+              {(question.type === "choice"
                 ? question.options.find(opt => opt.name === selectedOption)?.content.trim() === question.correct.trim()
                 : getWriteResult()
               ) ? (
@@ -291,7 +342,7 @@ export function QuestionCardBlueBook({
                   <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
                     <h4 className="font-semibold text-sm mb-2">Solution</h4>
-                    <div 
+                    <div
                       className="text-sm text-muted-foreground leading-relaxed text-pretty prose prose-sm max-w-none"
                       dangerouslySetInnerHTML={{ __html: processContent(question.solution) }}
                     />
