@@ -15,6 +15,7 @@ const navigationItems = [
   { href: "/", label: "Home" },
   { href: "/question-bank", label: "Question Bank" },
   { href: "/practice-tests", label: "Practice Tests" },
+  { href: "/philosophy", label: "Philosophy" },
 ]
 
 export function Navigation() {

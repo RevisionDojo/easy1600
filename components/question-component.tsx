@@ -115,10 +115,10 @@ export function QuestionComponent({ question, showExplanation = false, onAnswer 
                 key={choice.id}
                 variant={selectedChoice?.id === choice.id ? "default" : "outline"}
                 className={`w-full justify-start text-left p-4 h-auto min-h-[3rem] ${getChoiceStatus(choice) === "correct"
-                    ? "bg-green-50 border-green-200 hover:bg-green-100 text-green-800"
-                    : getChoiceStatus(choice) === "incorrect"
-                      ? "bg-red-50 border-red-200 hover:bg-red-100 text-red-800"
-                      : ""
+                  ? "bg-green-50 border-green-200 hover:bg-green-100 text-green-800"
+                  : getChoiceStatus(choice) === "incorrect"
+                    ? "bg-red-50 border-red-200 hover:bg-red-100 text-red-800"
+                    : ""
                   }`}
                 onClick={() => handleChoiceSelect(choice)}
                 disabled={hasAnswered}
