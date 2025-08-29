@@ -14,6 +14,7 @@ import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
 import { SATDataService } from "@/lib/data-service"
 import { mapBluebookToEnhanced, mapOfficialPracticeToEnhanced, EnhancedQuestion } from "@/lib/question-mappers"
+import { captureEvent } from "@/lib/posthog"
 
 interface ModuleSection {
   subject: string
@@ -265,7 +266,7 @@ export default function PracticeTestPage() {
         })
       }
 
-      setSession({
+      const newSession = {
         testName: displayName,
         isCompleteExam,
         modules,
@@ -277,6 +278,18 @@ export default function PracticeTestPage() {
         timeSpent: 0,
         isCompleted: false,
         isPaused: false
+      }
+
+      setSession(newSession)
+
+      // Track test start in PostHog
+      captureEvent('practice_test_started', {
+        test_name: displayName,
+        is_complete_exam: isCompleteExam,
+        total_questions: globalIndex,
+        subject: subject,
+        source: source,
+        modules_count: modules.length
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load test')
@@ -349,11 +362,42 @@ export default function PracticeTestPage() {
           const newModules = [...prev.modules]
           newModules[prev.currentModuleIndex].isCompleted = true
 
-          return {
+          const completedSession = {
             ...prev,
             modules: newModules,
             isCompleted: true
           }
+
+          // Track test completion in PostHog
+          const timeSpent = Math.floor((Date.now() - prev.startTime + prev.timeSpent) / 1000)
+          const correctAnswers = prev.modules.reduce((acc, module) => {
+            return acc + Object.entries(module.answers).filter(([questionId, answer]) => {
+              const question = module.questions.find((q: EnhancedQuestion) => {
+                const id: string = q.format === 'oneprep'
+                  ? (q.question as any).question_id?.toString()
+                  : (q.question as any).id?.toString()
+                return id === questionId
+              })
+              if (!question) return false
+
+              const choices = question.format === 'oneprep'
+                ? (question.question as any).choices
+                : (question.question as any).options
+              return choices?.find((c: any) => c.letter === answer)?.is_correct
+            }).length
+          }, 0)
+
+          captureEvent('practice_test_completed', {
+            test_name: prev.testName,
+            is_complete_exam: prev.isCompleteExam,
+            total_questions: prev.totalQuestions,
+            correct_answers: correctAnswers,
+            accuracy: (correctAnswers / prev.totalQuestions) * 100,
+            time_spent_seconds: timeSpent,
+            modules_completed: prev.modules.length
+          })
+
+          return completedSession
         })
         setShowResults(true)
       }

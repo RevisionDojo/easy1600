@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { identifyUser } from '@/lib/posthog'
 import Cookies from 'js-cookie'
 
 interface AuthContextType {
@@ -41,6 +42,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setSession(session)
             setUser(session?.user ?? null)
             setLoading(false)
+
+            // Identify user in PostHog if session exists
+            if (session) {
+                identifyUser(session.user.id, {
+                    email: session.user.email,
+                    user_metadata: session.user.user_metadata
+                })
+            }
         }
 
         getInitialSession()
@@ -59,6 +68,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         expires: new Date(session.expires_at! * 1000),
                         secure: process.env.NODE_ENV === 'production',
                         sameSite: 'lax'
+                    })
+
+                    // Identify user in PostHog
+                    identifyUser(session.user.id, {
+                        email: session.user.email,
+                        user_metadata: session.user.user_metadata
                     })
                 } else {
                     // Remove auth cookie on sign out
