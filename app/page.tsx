@@ -80,6 +80,8 @@ export default function HomePage() {
             </div>
 
             {/* Bottom row - 3 cards */}
+            {/* Temporarily commented out - will be re-enabled later */}
+            {/*
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div
                 onClick={() => handleProtectedAction('/question-bank')}
@@ -114,6 +116,7 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+            */}
           </div>
 
           {/* Action buttons */}
