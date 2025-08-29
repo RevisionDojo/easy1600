@@ -5,396 +5,394 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { QuestionComponent } from "@/components/question-component"
-import { Clock, ArrowLeft, ArrowRight, Flag, CheckCircle, Target } from "lucide-react"
+import { QuestionCard } from "@/components/question-card"
+import { Navigation } from "@/components/navigation"
+import { Footer } from "@/components/footer"
+import { Clock, ArrowLeft, ArrowRight, Flag, CheckCircle, Target, Loader2, AlertCircle, Play, Pause } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { SATDataService } from "@/lib/data-service"
+import { mapBluebookToEnhanced, EnhancedQuestion } from "@/lib/question-mappers"
 
-// Mock test data - in real app this would come from API
-const mockTest = {
-  id: 1,
-  title: "Official SAT Practice Test #1",
-  sections: [
-    {
-      name: "Reading",
-      duration: 65,
-      questions: [
-        {
-          question_id: 1001,
-          answer_type: "mcq",
-          stem: "The passage suggests that the author's primary concern is:",
-          explanation: "The author's main focus throughout the passage is on environmental conservation.",
-          choices: [
-            {
-              id: 1,
-              letter: "A",
-              html: "<p>economic development</p>",
-              text: "economic development",
-              is_correct: false,
-            },
-            {
-              id: 2,
-              letter: "B",
-              html: "<p>environmental conservation</p>",
-              text: "environmental conservation",
-              is_correct: true,
-            },
-            {
-              id: 3,
-              letter: "C",
-              html: "<p>technological advancement</p>",
-              text: "technological advancement",
-              is_correct: false,
-            },
-            { id: 4, letter: "D", html: "<p>social reform</p>", text: "social reform", is_correct: false },
-          ],
-        },
-      ],
-    },
-    {
-      name: "Writing & Language",
-      duration: 35,
-      questions: [
-        {
-          question_id: 1002,
-          answer_type: "mcq",
-          stem: "Which choice provides the most effective transition to the next paragraph?",
-          explanation: "The transition should connect the previous discussion to the new topic being introduced.",
-          choices: [
-            {
-              id: 5,
-              letter: "A",
-              html: "<p>However, this approach has limitations.</p>",
-              text: "However, this approach has limitations.",
-              is_correct: true,
-            },
-            {
-              id: 6,
-              letter: "B",
-              html: "<p>In conclusion, the results were positive.</p>",
-              text: "In conclusion, the results were positive.",
-              is_correct: false,
-            },
-            {
-              id: 7,
-              letter: "C",
-              html: "<p>Furthermore, the data supports this.</p>",
-              text: "Furthermore, the data supports this.",
-              is_correct: false,
-            },
-            {
-              id: 8,
-              letter: "D",
-              html: "<p>DELETE the underlined sentence.</p>",
-              text: "DELETE the underlined sentence.",
-              is_correct: false,
-            },
-          ],
-        },
-      ],
-    },
-  ],
+interface TestSession {
+  testName: string
+  questions: EnhancedQuestion[]
+  currentQuestionIndex: number
+  answers: Record<string, string | null>
+  startTime: number
+  timeSpent: number
+  isCompleted: boolean
+  isPaused: boolean
 }
 
 export default function PracticeTestPage() {
   const params = useParams()
-  const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [timeRemaining, setTimeRemaining] = useState(65 * 60) // 65 minutes in seconds
-  const [answers, setAnswers] = useState<Record<number, any>>({})
-  const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set())
-  const [isTestStarted, setIsTestStarted] = useState(false)
+  const testName = decodeURIComponent(params.id as string)
+
+  const [session, setSession] = useState<TestSession | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
 
-  const currentSection = mockTest.sections[currentSectionIndex]
-  const currentQuestion = currentSection?.questions[currentQuestionIndex]
-  const totalQuestions = mockTest.sections.reduce((sum, section) => sum + section.questions.length, 0)
-  const answeredQuestions = Object.keys(answers).length
-
-  // Timer effect
   useEffect(() => {
-    if (!isTestStarted || showResults) return
+    loadTest()
+  }, [testName])
+
+  useEffect(() => {
+    if (!session || session.isCompleted || session.isPaused) return
 
     const timer = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          setShowResults(true)
-          return 0
-        }
-        return prev - 1
-      })
+      setSession(prev => prev ? {
+        ...prev,
+        timeSpent: Date.now() - prev.startTime
+      } : null)
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [isTestStarted, showResults])
+  }, [session?.isPaused, session?.isCompleted])
 
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const secs = seconds % 60
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-    }
-    return `${minutes}:${secs.toString().padStart(2, "0")}`
-  }
+  const loadTest = async () => {
+    setLoading(true)
+    setError(null)
 
-  const handleAnswer = (selectedChoice: any, isCorrect: boolean) => {
-    if (currentQuestion) {
-      setAnswers((prev) => ({
-        ...prev,
-        [currentQuestion.question_id]: {
-          choice: selectedChoice,
-          isCorrect,
-        },
-      }))
-    }
-  }
+    try {
+      const response = await SATDataService.getBluebookTestById(testName)
 
-  const handleNext = () => {
-    if (currentQuestionIndex < currentSection.questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1)
-    } else if (currentSectionIndex < mockTest.sections.length - 1) {
-      setCurrentSectionIndex((prev) => prev + 1)
-      setCurrentQuestionIndex(0)
-    }
-  }
+      if (response.error) {
+        setError(response.error)
+        return
+      }
 
-  const handlePrevious = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1)
-    } else if (currentSectionIndex > 0) {
-      setCurrentSectionIndex((prev) => prev - 1)
-      setCurrentQuestionIndex(mockTest.sections[currentSectionIndex - 1].questions.length - 1)
-    }
-  }
+      if (response.data.length === 0) {
+        setError('Test not found')
+        return
+      }
 
-  const toggleFlag = () => {
-    if (currentQuestion) {
-      setFlaggedQuestions((prev) => {
-        const newSet = new Set(prev)
-        if (newSet.has(currentQuestion.question_id)) {
-          newSet.delete(currentQuestion.question_id)
-        } else {
-          newSet.add(currentQuestion.question_id)
-        }
-        return newSet
+      const enhancedQuestions = response.data.map(mapBluebookToEnhanced)
+
+      setSession({
+        testName,
+        questions: enhancedQuestions,
+        currentQuestionIndex: 0,
+        answers: {},
+        startTime: Date.now(),
+        timeSpent: 0,
+        isCompleted: false,
+        isPaused: false
       })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load test')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const finishTest = () => {
-    setShowResults(true)
+  const handleAnswer = (answer: any, isCorrect: boolean) => {
+    if (!session) return
+
+    const questionId = session.questions[session.currentQuestionIndex].metadata.id
+    setSession(prev => prev ? {
+      ...prev,
+      answers: {
+        ...prev.answers,
+        [questionId]: typeof answer === 'object' ? answer.letter : answer
+      }
+    } : null)
   }
 
-  if (!isTestStarted) {
+  const goToNextQuestion = () => {
+    if (!session) return
+
+    if (session.currentQuestionIndex < session.questions.length - 1) {
+      setSession(prev => prev ? {
+        ...prev,
+        currentQuestionIndex: prev.currentQuestionIndex + 1
+      } : null)
+    } else {
+      // Test completed
+      setSession(prev => prev ? {
+        ...prev,
+        isCompleted: true
+      } : null)
+      setShowResults(true)
+    }
+  }
+
+  const goToPreviousQuestion = () => {
+    if (!session || session.currentQuestionIndex === 0) return
+
+    setSession(prev => prev ? {
+      ...prev,
+      currentQuestionIndex: prev.currentQuestionIndex - 1
+    } : null)
+  }
+
+  const togglePause = () => {
+    if (!session) return
+
+    setSession(prev => prev ? {
+      ...prev,
+      isPaused: !prev.isPaused,
+      startTime: !prev.isPaused ? prev.startTime : Date.now() - prev.timeSpent
+    } : null)
+  }
+
+  const formatTime = (milliseconds: number) => {
+    const totalSeconds = Math.floor(milliseconds / 1000)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+    }
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  const calculateScore = () => {
+    if (!session) return { correct: 0, total: 0, percentage: 0 }
+
+    let correct = 0
+    const total = session.questions.length
+
+    session.questions.forEach(question => {
+      const questionId = question.metadata.id
+      const userAnswer = session.answers[questionId]
+
+      if (question.format === 'bluebook') {
+        const bluebookQ = question.question as any
+        if (userAnswer === bluebookQ.correct) {
+          correct++
+        }
+      }
+    })
+
+    return {
+      correct,
+      total,
+      percentage: Math.round((correct / total) * 100)
+    }
+  }
+
+  // Loading state
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="w-full max-w-2xl mx-4">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl mb-4">{mockTest.title}</CardTitle>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <strong>Total Questions:</strong> {totalQuestions}
-                </div>
-                <div>
-                  <strong>Total Time:</strong> {formatTime(timeRemaining)}
-                </div>
-              </div>
-              <div>
-                <strong>Sections:</strong>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {mockTest.sections.map((section, index) => (
-                    <Badge key={index} variant="outline">
-                      {section.name} ({section.questions.length} questions)
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span>Loading practice test...</span>
             </div>
-          </CardHeader>
-          <CardContent className="text-center space-y-4">
-            <p className="text-muted-foreground">
-              Make sure you have a quiet environment and enough time to complete the test. The timer will start as soon
-              as you begin.
-            </p>
-            <div className="flex gap-4 justify-center">
-              <Link href="/practice-tests">
-                <Button variant="outline" className="bg-transparent">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Tests
-                </Button>
-              </Link>
-              <Button onClick={() => setIsTestStarted(true)} size="lg">
-                Start Test
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+        <Footer />
       </div>
     )
   }
 
-  if (showResults) {
-    const correctAnswers = Object.values(answers).filter((answer) => answer.isCorrect).length
-    const score = Math.round((correctAnswers / totalQuestions) * 100)
-
+  // Error state
+  if (error) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="border-b bg-card">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center gap-2">
-              <Target className="h-6 w-6 text-primary" />
-              <span className="text-lg font-bold">Easy1600</span>
-            </div>
-          </div>
-        </header>
-
-        <main className="container mx-auto px-4 py-8">
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl mb-4">Test Complete!</CardTitle>
-              <div className="text-6xl font-bold text-primary mb-4">{score}%</div>
-              <p className="text-muted-foreground">
-                You answered {correctAnswers} out of {totalQuestions} questions correctly
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-green-600">{correctAnswers}</div>
-                  <div className="text-sm text-muted-foreground">Correct</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-red-600">{totalQuestions - correctAnswers}</div>
-                  <div className="text-sm text-muted-foreground">Incorrect</div>
-                </div>
+        <Navigation />
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-2xl mx-auto border-destructive">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-destructive mb-4">
+                <AlertCircle className="h-5 w-5" />
+                <span className="font-semibold">Error loading test</span>
               </div>
-
-              <div className="flex gap-4 justify-center">
-                <Link href="/practice-tests">
-                  <Button variant="outline" className="bg-transparent">
+              <p className="text-sm text-muted-foreground mb-4">{error}</p>
+              <div className="flex gap-2">
+                <Link href="/official-exams">
+                  <Button variant="outline">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
                     Back to Tests
                   </Button>
                 </Link>
-                <Button
-                  onClick={() => {
-                    setIsTestStarted(false)
-                    setShowResults(false)
-                    setCurrentSectionIndex(0)
-                    setCurrentQuestionIndex(0)
-                    setAnswers({})
-                    setTimeRemaining(65 * 60)
-                  }}
-                >
-                  Retake Test
+                <Button onClick={loadTest}>
+                  <Target className="h-4 w-4 mr-2" />
+                  Retry
                 </Button>
               </div>
             </CardContent>
           </Card>
-        </main>
+        </div>
+        <Footer />
       </div>
     )
   }
 
+  if (!session) {
+    return null
+  }
+
+  // Results view
+  if (showResults) {
+    const score = calculateScore()
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-2xl mx-auto">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Test Complete! 🎉</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center space-y-6">
+                <div>
+                  <div className="text-4xl font-bold text-primary mb-2">
+                    {score.percentage}%
+                  </div>
+                  <div className="text-muted-foreground">
+                    {score.correct} out of {score.total} questions correct
+                  </div>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  <div>Test: {session.testName}</div>
+                  <div>Time: {formatTime(session.timeSpent)}</div>
+                </div>
+
+                <div className="flex gap-2 justify-center">
+                  <Link href="/official-exams">
+                    <Button variant="outline">
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      Back to Tests
+                    </Button>
+                  </Link>
+                  <Button onClick={loadTest}>
+                    <Play className="h-4 w-4 mr-2" />
+                    Retake Test
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  const currentQuestion = session.questions[session.currentQuestionIndex]
+  const progress = ((session.currentQuestionIndex + 1) / session.questions.length) * 100
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Test Header */}
-      <header className="border-b bg-card sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
+      <Navigation />
+
+      <div className="container mx-auto px-4 py-8">
+        {/* Test Header */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-primary" />
-                <span className="font-bold">Easy1600</span>
+              <Link href="/official-exams">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Exit Test
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-xl font-bold">{session.testName}</h1>
+                <p className="text-sm text-muted-foreground">
+                  Question {session.currentQuestionIndex + 1} of {session.questions.length}
+                </p>
               </div>
-              <Badge variant="outline">{currentSection.name}</Badge>
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                <span className={timeRemaining < 300 ? "text-red-600 font-bold" : ""}>{formatTime(timeRemaining)}</span>
+                <span className="text-sm font-mono">
+                  {formatTime(session.timeSpent)}
+                </span>
               </div>
-              <Button variant="outline" size="sm" onClick={finishTest} className="bg-transparent">
-                Finish Test
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={togglePause}
+              >
+                {session.isPaused ? (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Resume
+                  </>
+                ) : (
+                  <>
+                    <Pause className="h-4 w-4 mr-2" />
+                    Pause
+                  </>
+                )}
               </Button>
             </div>
           </div>
 
-          {/* Progress Bar */}
-          <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-              <span>
-                Question {currentQuestionIndex + 1} of {currentSection.questions.length}
-              </span>
-              <span>
-                {answeredQuestions} of {totalQuestions} answered
-              </span>
+          <Progress value={progress} className="h-2" />
+        </div>
+
+        {/* Question */}
+        {session.isPaused ? (
+          <Card className="max-w-2xl mx-auto">
+            <CardContent className="pt-6 text-center">
+              <div className="text-6xl mb-4">⏸️</div>
+              <h2 className="text-xl font-semibold mb-2">Test Paused</h2>
+              <p className="text-muted-foreground mb-6">
+                Take a break! Click Resume when you're ready to continue.
+              </p>
+              <Button onClick={togglePause}>
+                <Play className="h-4 w-4 mr-2" />
+                Resume Test
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="max-w-4xl mx-auto">
+            <QuestionCard
+              data={currentQuestion.question}
+              format={currentQuestion.format}
+              showExplanation={false}
+              onAnswer={handleAnswer}
+            />
+
+            {/* Navigation */}
+            <div className="flex items-center justify-between mt-6">
+              <Button
+                variant="outline"
+                onClick={goToPreviousQuestion}
+                disabled={session.currentQuestionIndex === 0}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Previous
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {Object.keys(session.answers).length} of {session.questions.length} answered
+                </span>
+              </div>
+
+              <Button onClick={goToNextQuestion}>
+                {session.currentQuestionIndex === session.questions.length - 1 ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Finish Test
+                  </>
+                ) : (
+                  <>
+                    Next
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </>
+                )}
+              </Button>
             </div>
-            <Progress value={(answeredQuestions / totalQuestions) * 100} className="h-2" />
           </div>
-        </div>
-      </header>
+        )}
+      </div>
 
-      <main className="container mx-auto px-4 py-6">
-        <div className="max-w-4xl mx-auto">
-          {currentQuestion && (
-            <div className="space-y-6">
-              <QuestionComponent question={currentQuestion} onAnswer={handleAnswer} showExplanation={false} />
-
-              {/* Navigation Controls */}
-              <Card>
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <Button
-                      variant="outline"
-                      onClick={handlePrevious}
-                      disabled={currentSectionIndex === 0 && currentQuestionIndex === 0}
-                      className="bg-transparent"
-                    >
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      Previous
-                    </Button>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={toggleFlag}
-                        className={`bg-transparent ${
-                          flaggedQuestions.has(currentQuestion.question_id) ? "text-yellow-600 border-yellow-600" : ""
-                        }`}
-                      >
-                        <Flag className="h-4 w-4 mr-1" />
-                        {flaggedQuestions.has(currentQuestion.question_id) ? "Flagged" : "Flag"}
-                      </Button>
-
-                      {answers[currentQuestion.question_id] && (
-                        <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Answered
-                        </Badge>
-                      )}
-                    </div>
-
-                    <Button
-                      onClick={handleNext}
-                      disabled={
-                        currentSectionIndex === mockTest.sections.length - 1 &&
-                        currentQuestionIndex === currentSection.questions.length - 1
-                      }
-                    >
-                      Next
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
-      </main>
+      <Footer />
     </div>
   )
 }
